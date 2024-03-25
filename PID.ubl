@@ -1,52 +1,60 @@
 module PID
 author Russell
-version 0 3
-description 'PID Control Loop Math'
-variables _pid_lists_created _pid__prev_error _pid__prev_time _pid__prev_integral 
+version 0 4
+description 'PID Control Loop'
+variables _pid_initialized _pid__prev_error _pid__prev_time _pid__prev_integral 
 
-  spec 'r' 'elapsed_time' 'elapsed_time start_time _ end_time _' 'num num' 0 0
+  spec ' ' '_extend_pid_lists' '_extend pid lists; index _' 'num' 1
+  spec ' ' '_init_pid_library' '_init_pid_library'
+  spec 'r' 'elapsed_microseconds' 'elapsed_microseconds start_time _ end_time _' 'num num' 0 0
   spec 'r' 'compute_pid' 'compute pid at index _ error _ p coeff _ i coeff _ d coeff _' 'num num num num num num' 1 0 1 0 0
   spec ' ' 'reset_pid' 'reset pid at index _' 'num' 1
-  spec ' ' '_extend_pid_lists' '_extend pid lists; index _' 'num' 1
 
-to '_extend_pid_lists' index {
+to _extend_pid_lists index {
   comment 'Extend the global lists used for PID computations,
 if needed, so that they are large enough to use the specified index.
-This must be called at least once before accessing any global list variables.'
-  if (not _pid_lists_created) {
+This must be called by every public block.'
+  _init_pid_library
+  repeatUntil ((size _pid__prev_error) >= index) {
+    '[data:addLast]' 0 _pid__prev_error
+    '[data:addLast]' -1 _pid__prev_time
+    '[data:addLast]' 0 _pid__prev_integral
+  }
+}
+
+to _init_pid_library {
+  comment 'Create global lists. Must be called by every public block,
+  but that can be accomplished by calling _extend_pid_lists.'
+  if (not _pid_initialized) {
     _pid__prev_error = (newList 0)
     _pid__prev_time = (newList 0)
     _pid__prev_integral = (newList 0)
-    _pid_lists_created = true
-  }
-  repeatUntil ((size _pid__prev_error) >= index) {
-    '[data:addLast]' 0 _pid__prev_error
-    '[data:addLast]' 0 _pid__prev_time
-    '[data:addLast]' 0 _pid__prev_integral
+    _pid_initialized = true
   }
 }
 
 to compute_pid index error p_coeff i_coeff d_coeff {
   comment 'Compute the next PID correction value, using inputs:
-• index: index of the PID loop error: measured error
-• p_coeff: proportional coefficient
-• i_coeff: integral coefficient per second
-• d_coeff: derivitive coefficient * seconds'
+• index: index of the PID loop
+• error: error to correct
+• p_coeff: proportional coefficient (corr/error)
+• i_coeff: integral coefficient (corr-seconds/error)
+• d_coeff: derivitive coefficient (corr/error-seconds)'
   _extend_pid_lists index
   local 'p_value' 0
   local 'i_value' 0
   local 'd_value' 0
   local 'integral' 0
-  local 'curr_time' (millisOp)
+  local 'curr_time' (microsOp)
   local 'prev_time' (at index _pid__prev_time)
   p_value = (p_coeff * error)
-  if (prev_time > 0) {
+  if (prev_time >= 0) {
     comment 'We have old data for this PID loop.
 Compute derivitive and integral contributions.'
-    local 'delta_time' (elapsed_time prev_time curr_time)
+    local 'delta_time' (elapsed_microseconds prev_time curr_time)
     local 'diff_error' (error - (at index _pid__prev_error))
-    d_value = (((d_coeff * diff_error) * 1000) / delta_time)
-    integral = (((error * delta_time) / 1000) + (at index _pid__prev_integral))
+    d_value = (((d_coeff * diff_error) * 1000000) / delta_time)
+    integral = (((error * delta_time) / 1000000) + (at index _pid__prev_integral))
     i_value = (i_coeff * integral)
   }
   atPut index _pid__prev_time curr_time
@@ -55,9 +63,10 @@ Compute derivitive and integral contributions.'
   return (-1 * (p_value + (i_value + d_value)))
 }
 
-to elapsed_time start_time end_time {
-  comment 'Safely compute an elapsed time from two millisecond or microsecond clock values,  
-taking into account the fact that clock values wrap from 1073741823 to 0.'
+to elapsed_microseconds start_time end_time {
+  comment 'Safely compute an elapsed time from two microsecond clock values,  
+taking into account the fact that the microsecond clock wraps from 1073741823 to 0.
+Warning: does not work for the millisecond clock, because that wraps at a different (smaller) value.'
   local 'delta_time' (end_time - start_time)
   if (delta_time < 0) {
     delta_time += -1073741824
@@ -71,7 +80,7 @@ Call this before starting each move, to avoid unwanted corrections
 from the integral and derivitive terms.'
   _extend_pid_lists index
   atPut index _pid__prev_error 0
-  atPut index _pid__prev_time 0
+  atPut index _pid__prev_time -1
   atPut index _pid__prev_integral 0
 }
 
