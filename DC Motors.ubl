@@ -1,14 +1,18 @@
 module 'DC Motors'
 author Russell
-version 0 2
+version 0 3
 description 'Drive DC motors with encoders'
-variables motors__encoder_counts _motors__num_motors _motors_left_index _motors_right_index _motors_encoder_threshold _motors__pin_duty_cycle _motors__pin_encoder_a _motors__pin_encoder_b _motors__pin_direction _xrp_pin_input_voltage _motors__prev_encoder_a_state 
+depends PID
+variables motors__encoder_counts _motors__max_speed _motors__num_motors _motors__left_index _motors__right_index _motors__encoder_threshold _motors__pin_duty_cycle _motors__pin_encoder_a _motors__pin_encoder_b _motors__pin_direction _xrp_pin_input_voltage _motors__prev_encoder_a_state _motors__do_follow _motors__target_speed _motors__prev_follow_time _motors__prev_encoder_counts _motors__prev_effort _motors__p_coeff _motors__i_coeff _motors__d_coeff
 
   spec ' ' 'init' 'init'
+  spec ' ' '_init_common_variables' '_init_common_variables num_motors _' 'num' 2
   spec ' ' 'init_xrp' 'init xrp num_motors _' 'num' 2
   spec ' ' 'monitor_motor_encoders' 'monitor motor encoders'
+  spec ' ' 'motors_follow_target_speed' 'motors follow target speed'
   spec ' ' 'reset_motor_encoder' 'reset motor encoder index _' 'num' 1
   spec ' ' 'set_motor_effort' 'set motor effort index _ effort _ (-1023 to 1023)' 'num num' 1 250
+  spec ' ' 'set_motor_target_speed' 'set motor target speed index _ speed _ (encoder counts/sec)' 'num num' 1 500
   spec ' ' 'stop_all_motors' 'stop all motors'
   spec ' ' 'stop_motor' 'stop motor index _' 'num' 1
   spec ' ' '_xrp_check_input_voltage' '_xrp_check_input_voltage'
@@ -16,21 +20,22 @@ variables motors__encoder_counts _motors__num_motors _motors_left_index _motors_
 
 to '_xrp_check_input_voltage' {
   comment 'Check to see that the board has motor power and say something if not.'
-  if ((analogReadOp _xrp_pin_input_voltage) < 300) {
+  while ((analogReadOp _xrp_pin_input_voltage) < 300) {
     sayIt 'Insufficient motor voltage; check the power switch and batteries.'
-    waitUntil ((analogReadOp _xrp_pin_input_voltage) < 300)
   }
+  sayIt ''
 }
 
 to '_xrp_init_variables' num_motors {
   if (_motors__num_motors == num_motors) {return}
-  if nil {
+  if ((num_motors < 2) or (num_motors > 4)) {
     sayIt 'Number of motors must be 2-4'
     return
   }
-  _motors_left_index = 1
-  _motors_right_index = 2
-  motors__encoder_counts = (newList num_motors 0)
+  _motors__left_index = 1
+  _motors__right_index = 2
+  comment 'Approximate maximum motor speed (encoder counts/second) with no load'
+  _motors__max_speed = 1080
   _motors__pin_encoder_a = (newList num_motors 0)
   _motors__pin_encoder_b = (newList num_motors 0)
   _motors__pin_direction = (newList num_motors 0)
@@ -57,7 +62,6 @@ to '_xrp_init_variables' num_motors {
     atPut 4 _motors__pin_duty_cycle 11
   }
   _xrp_pin_input_voltage = 28
-  _motors__num_motors = num_motors
 }
 
 to init {
@@ -66,9 +70,24 @@ to init {
   init_xrp 2
 }
 
+to _init_common_variables num_motors {
+  if (_motors__num_motors == num_motors) {return}
+  motors__encoder_counts = (newList num_motors 0)
+  _motors__do_follow = (newList num_motors (booleanConstant false))
+  _motors__target_speed = (newList num_motors 0)
+  _motors__prev_follow_time = (newList num_motors -1)
+  _motors__prev_encoder_counts = (newList num_motors 0)
+  _motors__prev_effort = (newList num_motors 0)
+  _motors__p_coeff = 1
+  _motors__i_coeff = 0
+  _motors__d_coeff = 0
+}
+
 to init_xrp num_motors {
-  '_xrp_init_variables' num_motors
-  '_xrp_check_input_voltage'
+  _init_common_variables num_motors
+  _xrp_init_variables num_motors
+  _xrp_check_input_voltage
+  _motors__num_motors = num_motors
 }
 
 to monitor_motor_encoders {
@@ -88,6 +107,7 @@ to monitor_motor_encoders {
       encoder_b_state = (digitalReadOp (at i _motors__pin_encoder_b))
       prev_encoder_a_state = (at i _motors__prev_encoder_a_state)
       if (encoder_a_state != prev_encoder_a_state) {
+        atPut i _motors__prev_encoder_a_state encoder_a_state
         if (encoder_a_state == encoder_b_state) {
           atPut i motors__encoder_counts ((at i motors__encoder_counts) - 1)
         } else {
@@ -98,6 +118,49 @@ to monitor_motor_encoders {
   }
 }
 
+to motors_follow_target_speed {
+    for i _motors__num_motors {
+        reset_pid i
+    }
+    init
+    local target_speed 0
+    local encoder_counts 0
+    local meas_speed 0
+    local error 0
+    local correction 0
+    local effort 0
+    local curr_time 0
+    local prev_time 0
+    local prev_effort 0
+    local prev_encoder_counts 0
+    local prev_effort 0
+    forever {
+      for i _motors__num_motors {
+        target_speed = (at i _motors__target_speed)
+        encoder_counts = (at i motors__encoder_counts)
+        curr_time = (microsOp)
+        prev_time = (at i _motors__prev_follow_time)
+        prev_effort = (at i _motors__prev_effort)
+        prev_encoder_counts = (at i _motors__prev_encoder_counts)
+        if (at i _motors__do_follow) {
+            if (prev_time >= 0) {
+                comment 'Update to handle encoder wraparound'
+                meas_speed = (((encoder_counts - prev_encoder_counts) * 1000000) / (elapsed_microseconds prev_time curr_time))
+                error = (meas_speed - target_speed)
+                correction = (compute_pid i error _motors__p_coeff _motors__i_coeff _motors__d_coeff)
+                effort = (prev_effort + (correction / 10))
+            } else {
+                 effort = ((1023 * target_speed) / _motors__max_speed)
+            }
+            set_motor_effort i effort
+            atPut i _motors__prev_follow_time curr_time
+            atPut i _motors__prev_effort effort
+            atPut i _motors__prev_encoder_counts encoder_counts
+        }
+      }
+    }
+}
+
 to reset_motor_encoder index {
     init
     atPut index motors__encoder_counts 0
@@ -105,10 +168,15 @@ to reset_motor_encoder index {
 
 to set_motor_effort index effort {
   init
-  if else {
-    analogWriteOp (at index _motors__pin_duty_cycle) (absoluteValue effort)
-    digitalWriteOp (at index _motors__pin_direction) (effort > 0)
-  }
+  analogWriteOp (at index _motors__pin_duty_cycle) (absoluteValue effort)
+  digitalWriteOp (at index _motors__pin_direction) (effort > 0)
+}
+
+to set_motor_target_speed index speed {
+  comment 'Set the motor target speed and enable following (if not already enabled)'
+  init
+  atPut index _motors__target_speed speed
+  atPut index _motors__do_follow (booleanConstant true)
 }
 
 to stop_all_motors {
@@ -119,6 +187,6 @@ to stop_all_motors {
 
 to stop_motor index {
   init
+  atPut index _motors__do_follow (booleanConstant false)
   analogWriteOp (at index _motors__pin_duty_cycle) 0
 }
-
