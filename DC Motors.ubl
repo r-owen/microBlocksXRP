@@ -1,149 +1,124 @@
 module 'DC Motors'
-author Russell Owen
-version 0 1 \
+author Russell
+version 0 2
 description 'Drive DC motors with encoders'
-variables left_motor_encoder right_motor_encoder _motors__initialized _motors_left_index _motors_right_index _motors__pin_duty_cycle _motors__pin_encoder_a _motors__pin_encoder_b _motors__pin_direction _xrp_pin_motor_R_Enable _xrp_pin_motor_R_EncoderA _xrp_pin_motor_R_EncoderB _xrp_pin_motor_R_Phase _xrp_pin_VIN_measure
+variables motors__encoder_counts _motors__num_motors _motors_left_index _motors_right_index _motors_encoder_threshold _motors__pin_duty_cycle _motors__pin_encoder_a _motors__pin_encoder_b _motors__pin_direction _xrp_pin_input_voltage _motors__prev_encoder_a_state 
 
-  spec ' ' 'stop_motor' 'stop motor index _' 'num' 1
-  spec ' ' 'stop_all_motors' 'stop all motors'
-  spec ' ' 'set_motor_effort' 'set motor effort index _ effort _ (-1023 to 1023)' 'num num' 1 250
-  spec ' ' 'motor effort' 'motor effort _ _ (-1023 to 1023)' 'num num' 250 250
-  spec ' ' 'XRP Power check' 'XRP Power check'
-  spec 'r' 'XRP VIN' 'XRP VIN'
   spec ' ' 'init' 'init'
-  spec ' ' 'init_xrp' 'init xrp'
-  spec ' ' 'monitor_left_motor_encoder' 'monitor_left_motor_encoder'
-  spec ' ' 'monitor_right_motor_encoder' 'monitor_right_motor_encoder'
+  spec ' ' 'init_xrp' 'init xrp num_motors _' 'num' 2
+  spec ' ' 'monitor_motor_encoders' 'monitor motor encoders'
+  spec ' ' 'reset_motor_encoder' 'reset motor encoder index _' 'num' 1
+  spec ' ' 'set_motor_effort' 'set motor effort index _ effort _ (-1023 to 1023)' 'num num' 1 250
+  spec ' ' 'stop_all_motors' 'stop all motors'
+  spec ' ' 'stop_motor' 'stop motor index _' 'num' 1
+  spec ' ' '_xrp_check_input_voltage' '_xrp_check_input_voltage'
+  spec ' ' '_xrp_init_variables' '_xrp_init_variables num_motors _' 'num' 2
 
-to stop_motor index {
-  analogWriteOp (at index _motors__pin_duty_cycle) 0
-}
-
-to stop_all_motors {
-  for i (size _motors__pin_duty_cycle) {
-      stop_motor i
+to '_xrp_check_input_voltage' {
+  comment 'Check to see that the board has motor power and say something if not.'
+  if ((analogReadOp _xrp_pin_input_voltage) < 300) {
+    sayIt 'Insufficient motor voltage; check the power switch and batteries.'
+    waitUntil ((analogReadOp _xrp_pin_input_voltage) < 300)
   }
 }
 
+to '_xrp_init_variables' num_motors {
+  if (_motors__num_motors == num_motors) {return}
+  if nil {
+    sayIt 'Number of motors must be 2-4'
+    return
+  }
+  _motors_left_index = 1
+  _motors_right_index = 2
+  motors__encoder_counts = (newList num_motors 0)
+  _motors__pin_encoder_a = (newList num_motors 0)
+  _motors__pin_encoder_b = (newList num_motors 0)
+  _motors__pin_direction = (newList num_motors 0)
+  _motors__pin_duty_cycle = (newList num_motors 0)
+  _motors__prev_encoder_a_state = (newList num_motors (booleanConstant false))
+  atPut 1 _motors__pin_encoder_a 4
+  atPut 1 _motors__pin_encoder_b 5
+  atPut 1 _motors__pin_direction 6
+  atPut 1 _motors__pin_duty_cycle 7
+  atPut 2 _motors__pin_encoder_a 12
+  atPut 2 _motors__pin_encoder_b 13
+  atPut 2 _motors__pin_direction 14
+  atPut 2 _motors__pin_duty_cycle 15
+  if (num_motors > 2) {
+    atPut 3 _motors__pin_encoder_a 0
+    atPut 3 _motors__pin_encoder_b 1
+    atPut 3 _motors__pin_direction 2
+    atPut 3 _motors__pin_duty_cycle 3
+  }
+  if (num_motors > 3) {
+    atPut 4 _motors__pin_encoder_a 8
+    atPut 4 _motors__pin_encoder_b 9
+    atPut 4 _motors__pin_direction 10
+    atPut 4 _motors__pin_duty_cycle 11
+  }
+  _xrp_pin_input_voltage = 28
+  _motors__num_motors = num_motors
+}
+
+to init {
+  comment 'By default assumes an XRP robot kit with 2 motors.
+  Modify if you have a different motor kit.'
+  init_xrp 2
+}
+
+to init_xrp num_motors {
+  '_xrp_init_variables' num_motors
+  '_xrp_check_input_voltage'
+}
+
+to monitor_motor_encoders {
+  comment 'Monitor the motor encoders.
+  This must be called once to start monitoring, at which point it keeps running
+  until the system is stopped.
+  The encoders are assumed to be quadrature incremental encoders.
+  Here is an explanation for how this code works:
+  https://howtomechatronics.com/tutorials/arduino/rotary-encoder-works-use-arduino/'
+  init
+  local 'encoder_a_state' (booleanConstant false)
+  local 'encoder_b_state' (booleanConstant false)
+  local 'prev_encoder_a_state' (booleanConstant false)
+  forever {
+    for i _motors__num_motors {
+      encoder_a_state = (digitalReadOp (at i _motors__pin_encoder_a))
+      encoder_b_state = (digitalReadOp (at i _motors__pin_encoder_b))
+      prev_encoder_a_state = (at i _motors__prev_encoder_a_state)
+      if (encoder_a_state != prev_encoder_a_state) {
+        if (encoder_a_state == encoder_b_state) {
+          atPut i motors__encoder_counts ((at i motors__encoder_counts) - 1)
+        } else {
+          atPut i motors__encoder_counts ((at i motors__encoder_counts) + 1)
+        }
+      }
+    }
+  }
+}
+
+to reset_motor_encoder index {
+    init
+    atPut index motors__encoder_counts 0
+}
+
 to set_motor_effort index effort {
-  'init'
-  'XRP Power check'
+  init
   if else {
     analogWriteOp (at index _motors__pin_duty_cycle) (absoluteValue effort)
     digitalWriteOp (at index _motors__pin_direction) (effort > 0)
   }
 }
 
-to 'XRP Power check' {
-  comment 'Check to see that power to the board is on
-Suggest a change required for this script.'
-  if (('XRP VIN') < 300) {
-    sayIt 'Switch the XRP power to ON'
-    waitUntil (('XRP VIN') > 300)
+to stop_all_motors {
+  for i _motors__num_motors {
+    stop_motor i
   }
 }
 
-to 'XRP VIN' {
-  'init'
-  return (analogReadOp _xrp_pin_VIN_measure)
+to stop_motor index {
+  init
+  analogWriteOp (at index _motors__pin_duty_cycle) 0
 }
 
-to 'init' {
-  init_xrp
-}
-
-to 'init_xrp' {
-  if _motors__initialized {return}
-
-  _motors_left_index = 1
-  _motors_right_index = 2
-
-  _motors__pin_encoder_a = (newList 4)
-  _motors__pin_encoder_b = (newList 4)
-  _motors__pin_direction = (newList 4)
-  _motors__pin_duty_cycle = (newList 4)
-
-  atPut 1 _motors__pin_encoder_a 4
-  atPut 1 _motors__pin_encoder_b 5
-  atPut 1 _motors__pin_direction 6
-  atPut 1 _motors__pin_duty_cycle 7
-
-  atPut 2 _motors__pin_encoder_a 12
-  atPut 2 _motors__pin_encoder_b 13
-  atPut 2 _motors__pin_direction 14
-  atPut 2 _motors__pin_duty_cycle 15
-
-  atPut 3 _motors__pin_encoder_a 0
-  atPut 3 _motors__pin_encoder_b 1
-  atPut 3 _motors__pin_direction 2
-  atPut 3 _motors__pin_duty_cycle 3
-
-  atPut 4 _motors__pin_encoder_a 8
-  atPut 4 _motors__pin_encoder_b 9
-  atPut 4 _motors__pin_direction 10
-  atPut 4 _motors__pin_duty_cycle 11
-
-  _xrp_pin_motor_R_EncoderA = 12
-  _xrp_pin_motor_R_EncoderB = 13
-  _xrp_pin_motor_R_Enable = 15
-  _xrp_pin_motor_R_Phase = 14
-
-  _xrp_pin_VIN_measure = 28
-  _motors__initialized = (booleanConstant true)
-
-}
-
-to monitor_left_motor_encoder {
-  comment 'Algorithm for counting steps and direction for Arduino.
-https://howtomechatronics.com/tutorials/arduino/rotary-encoder-works-use-arduino/'
-  'init'
-  local 'aState' 0
-  local 'aLastState' (digitalReadOp _motors__pin_encoder_a)
-  forever {
-    aState = (digitalReadOp _motors__pin_encoder_a)
-    if (aState != aLastState) {
-      if ((digitalReadOp _motors__pin_encoder_b) != aState) {
-        left_motor_encoder += 1
-      } else {
-        left_motor_encoder += -1
-      }
-    }
-    aLastState = aState
-  }
-}
-
-
-to monitor_right_motor_encoder {
-  comment 'Algorithm for counting steps and direction for Arduino.
-https://howtomechatronics.com/tutorials/arduino/rotary-encoder-works-use-arduino/'
-  'init'
-  local 'aState' 0
-  local 'aLastState' (digitalReadOp _xrp_pin_motor_R_EncoderA)
-  forever {
-    aState = (digitalReadOp _xrp_pin_motor_R_EncoderA)
-    if (aState != aLastState) {
-      if ((digitalReadOp _xrp_pin_motor_R_EncoderB) != aState) {
-        right_motor_encoder += 1
-      } else {
-        right_motor_encoder += -1
-      }
-    }
-    aLastState = aState
-  }
-}
-
-to PID {
-  local 'pvalue' 0
-  local 'ivalue' 0
-  local 'dvalue' 0
-  local 'isum' 0
-  local 'curr_error' 0
-  local 'prev_error' 0
-  curr_error = actual - desired
-  pvalue = curr_error * p_coeff
-  dvalue = (curr_error - prev_error) * d_coeff
-  isum += curr_error
-  ivalue = isum * i_coeff
-  prev_error = curr_error
-  return (pvalue + ivalue + dvalue)
-}
