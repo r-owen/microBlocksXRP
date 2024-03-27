@@ -1,39 +1,63 @@
 module 'DC Motors'
 author Russell
-version 0 3
+version 0 4
 description 'Drive DC motors with encoders'
 depends PID
-variables motors__encoder_counts _motors__max_speed _motors__num_motors _motors__left_index _motors__right_index _motors__encoder_threshold _motors__pin_duty_cycle _motors__pin_encoder_a _motors__pin_encoder_b _motors__pin_direction _xrp_pin_input_voltage _motors__prev_encoder_a_state _motors__do_follow _motors__target_speed _motors__prev_follow_time _motors__prev_encoder_counts _motors__prev_effort _motors__p_coeff _motors__i_coeff _motors__d_coeff
+variables motors__encoder_counts _motors__num_motors _motors__max_speed _motors__left_index _motors__right_index _motors__pin_duty_cycle _motors__pin_encoder_a _motors__pin_encoder_b _motors__pin_direction _xrp_pin_input_voltage _motors__prev_encoder_a_state _motors__do_follow _motors__target_speed _motors__prev_follow_time _motors__prev_encoder_counts _motors__prev_effort _motors__p_coeff _motors__i_coeff _motors__d_coeff
 
   spec ' ' 'init' 'init'
   spec ' ' '_init_common_variables' '_init_common_variables num_motors _' 'num' 2
-  spec ' ' 'init_xrp' 'init xrp num_motors _' 'num' 2
-  spec ' ' 'monitor_motor_encoders' 'monitor motor encoders'
-  spec ' ' 'motors_follow_target_speed' 'motors follow target speed'
-  spec ' ' 'reset_motor_encoder' 'reset motor encoder index _' 'num' 1
-  spec ' ' 'set_motor_effort' 'set motor effort index _ effort _ (-1023 to 1023)' 'num num' 1 250
-  spec ' ' 'set_motor_target_speed' 'set motor target speed index _ speed _ (encoder counts/sec)' 'num num' 1 500
-  spec ' ' 'stop_all_motors' 'stop all motors'
-  spec ' ' 'stop_motor' 'stop motor index _' 'num' 1
   spec ' ' '_xrp_check_input_voltage' '_xrp_check_input_voltage'
   spec ' ' '_xrp_init_variables' '_xrp_init_variables num_motors _' 'num' 2
+  spec ' ' 'monitor_encoders' 'monitor motor encoders'
+  spec ' ' 'follow_target_speed' 'motors follow target speed'
+  spec ' ' 'reset_motor_encoder' 'reset motor encoder index _' 'num' 1
+  spec ' ' 'move_at_effort' 'move motor _ with effort _ (-1023 to 1023)' 'num num' 1 250
+  spec ' ' '_basic_move_at_effort' '_basic_move_at_effort index _ effort _ (-1023 to 1023)' 'num num' 1 250
+  spec ' ' 'move_motor_at_speed' 'move motor _ at speed _ (encoder counts/sec)' 'num num' 1 500
+  spec ' ' 'stop_all_motors' 'stop all motors'
+  spec ' ' 'stop_motor' 'stop motor _' 'num' 1
+
+to init {
+  comment 'Check motor power and initialize variables (if not already initialized).
+Defaults to an XRP robot kit with 2 motors; change this code for other systems'
+  local num_motors 2
+  if (_motors__num_motors != num_motors) {
+    _init_common_variables num_motors
+    _xrp_init_variables num_motors
+    _motors__num_motors = num_motors
+  }
+  _xrp_check_input_voltage
+}
+
+to _init_common_variables num_motors {
+  comment 'Initialize variables whose values do not depend on the type of system'
+  motors__encoder_counts = (newList num_motors 0)
+  _motors__do_follow = (newList num_motors (booleanConstant false))
+  _motors__target_speed = (newList num_motors 0)
+  _motors__prev_follow_time = (newList num_motors -1)
+  _motors__prev_encoder_counts = (newList num_motors 0)
+  _motors__prev_effort = (newList num_motors 0)
+}
 
 to '_xrp_check_input_voltage' {
   comment 'Check to see that the board has motor power and say something if not.'
-  while ((analogReadOp _xrp_pin_input_voltage) < 300) {
+  repeatUntil ((analogReadOp _xrp_pin_input_voltage) >= 300) {
     sayIt 'Insufficient motor voltage; check the power switch and batteries.'
   }
   sayIt ''
 }
 
 to '_xrp_init_variables' num_motors {
-  if (_motors__num_motors == num_motors) {return}
   if ((num_motors < 2) or (num_motors > 4)) {
     sayIt 'Number of motors must be 2-4'
     return
   }
   _motors__left_index = 1
   _motors__right_index = 2
+  _motors__p_coeff = 1
+  _motors__i_coeff = 0
+  _motors__d_coeff = 0
   comment 'Approximate maximum motor speed (encoder counts/second) with no load'
   _motors__max_speed = 1080
   _motors__pin_encoder_a = (newList num_motors 0)
@@ -64,33 +88,7 @@ to '_xrp_init_variables' num_motors {
   _xrp_pin_input_voltage = 28
 }
 
-to init {
-  comment 'By default assumes an XRP robot kit with 2 motors.
-  Modify if you have a different motor kit.'
-  init_xrp 2
-}
-
-to _init_common_variables num_motors {
-  if (_motors__num_motors == num_motors) {return}
-  motors__encoder_counts = (newList num_motors 0)
-  _motors__do_follow = (newList num_motors (booleanConstant false))
-  _motors__target_speed = (newList num_motors 0)
-  _motors__prev_follow_time = (newList num_motors -1)
-  _motors__prev_encoder_counts = (newList num_motors 0)
-  _motors__prev_effort = (newList num_motors 0)
-  _motors__p_coeff = 1
-  _motors__i_coeff = 0
-  _motors__d_coeff = 0
-}
-
-to init_xrp num_motors {
-  _init_common_variables num_motors
-  _xrp_init_variables num_motors
-  _xrp_check_input_voltage
-  _motors__num_motors = num_motors
-}
-
-to monitor_motor_encoders {
+to monitor_encoders {
   comment 'Monitor the motor encoders.
   This must be called once to start monitoring, at which point it keeps running
   until the system is stopped.
@@ -118,7 +116,7 @@ to monitor_motor_encoders {
   }
 }
 
-to motors_follow_target_speed {
+to follow_target_speed {
     for i _motors__num_motors {
         reset_pid i
     }
@@ -144,7 +142,7 @@ to motors_follow_target_speed {
         prev_encoder_counts = (at i _motors__prev_encoder_counts)
         if (at i _motors__do_follow) {
             if (prev_time >= 0) {
-                comment 'Update to handle encoder wraparound'
+                comment 'Note: simple subtraction handles encoder wraparound automatically'
                 meas_speed = (((encoder_counts - prev_encoder_counts) * 1000000) / (elapsed_microseconds prev_time curr_time))
                 error = (meas_speed - target_speed)
                 correction = (compute_pid i error _motors__p_coeff _motors__i_coeff _motors__d_coeff)
@@ -152,10 +150,13 @@ to motors_follow_target_speed {
             } else {
                  effort = ((1023 * target_speed) / _motors__max_speed)
             }
-            set_motor_effort i effort
-            atPut i _motors__prev_follow_time curr_time
-            atPut i _motors__prev_effort effort
-            atPut i _motors__prev_encoder_counts encoder_counts
+            comment 'Check that following is still wanted, just before commanding the motor'
+            if (at i _motors__do_follow) {
+                _basic_move_at_effort i effort
+                atPut i _motors__prev_follow_time curr_time
+                atPut i _motors__prev_effort effort
+                atPut i _motors__prev_encoder_counts encoder_counts
+            }
         }
       }
     }
@@ -166,14 +167,21 @@ to reset_motor_encoder index {
     atPut index motors__encoder_counts 0
 }
 
-to set_motor_effort index effort {
+to move_at_effort index effort {
   init
+  _basic_move_at_effort index effort
+}
+
+to _basic_move_at_effort index effort {
+  comment 'Implement move_at_effort, assuming init has been called'
   analogWriteOp (at index _motors__pin_duty_cycle) (absoluteValue effort)
   digitalWriteOp (at index _motors__pin_direction) (effort > 0)
 }
 
-to set_motor_target_speed index speed {
-  comment 'Set the motor target speed and enable following (if not already enabled)'
+to move_motor_at_speed index speed {
+  comment 'Move the specified motor at constant speed, using the encoders.
+This simply sets the motor target speed and enable following (if not already enabled);
+for the mogtor to actually move, the follow_target_speed block must be running.'
   init
   atPut index _motors__target_speed speed
   atPut index _motors__do_follow (booleanConstant true)
