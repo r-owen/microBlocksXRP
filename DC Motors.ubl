@@ -3,7 +3,7 @@ author Russell
 version 0 4
 description 'Drive DC motors with encoders'
 depends PID
-variables motors__encoder_counts _motors__num_motors _motors__max_speed _motors__left_index _motors__right_index _motors__pin_duty_cycle _motors__pin_encoder_a _motors__pin_encoder_b _motors__pin_direction _xrp_pin_input_voltage _motors__prev_encoder_a_state _motors__do_follow _motors__target_speed _motors__prev_follow_time _motors__prev_encoder_counts _motors__prev_effort _motors__p_coeff _motors__i_coeff _motors__d_coeff
+variables motors__encoder_counts _motors__num_motors _motors__max_speed _motors__left_index _motors__right_index _motors__pin_duty_cycle _motors__pin_encoder_a _motors__pin_encoder_b _motors__pin_direction _xrp_pin_input_voltage _motors__prev_encoder_a_state _motors__do_follow _motors__target_speed _motors__prev_follow_time _motors__prev_encoder_counts _motors__prev_keffort _motors__p_coeff _motors__i_coeff _motors__d_coeff
 
   spec ' ' 'init' 'init'
   spec ' ' '_init_common_variables' '_init_common_variables num_motors _' 'num' 2
@@ -37,7 +37,7 @@ to _init_common_variables num_motors {
     _motors__target_speed = (newList num_motors 0)
     _motors__prev_follow_time = (newList num_motors -1)
     _motors__prev_encoder_counts = (newList num_motors 0)
-    _motors__prev_effort = (newList num_motors 0)
+    _motors__prev_keffort = (newList num_motors 0)
 }
 
 to '_xrp_check_input_voltage' {
@@ -119,7 +119,7 @@ to monitor_encoders {
 to drive_motors_to_follow_target_speed {
     for i _motors__num_motors {
         reset_pid i
-        atPut i _motors__prev_effort 0
+        atPut i _motors__prev_keffort 0
         atPut i _motors__prev_encoder_counts 0
         atPut i _motors__prev_follow_time -1
     }
@@ -128,12 +128,12 @@ to drive_motors_to_follow_target_speed {
     local encoder_counts 0
     local error 0
     local correction 0
-    local effort 0
+    local keffort 0
     local curr_time 0
     local prev_time 0
-    local prev_effort 0
+    local prev_keffort 0
     local prev_encoder_counts 0
-    local prev_effort 0
+    local prev_keffort 0
     local delta_time 0
     local is_stuck (booleanConstant false)
     forever {
@@ -143,36 +143,27 @@ to drive_motors_to_follow_target_speed {
             encoder_counts = (at i motors__encoder_counts)
             curr_time = (microsOp)
             prev_time = (at i _motors__prev_follow_time)
-            prev_effort = (at i _motors__prev_effort)
+            prev_keffort = (at i _motors__prev_keffort)
             if (at i _motors__do_follow) {
+                is_stuck = (and (encoder_counts == prev_encoder_counts) (target_speed != 0))
                 if (prev_time >= 0) {
                     comment 'Note: simple subtraction handles encoder wraparound automatically'
                     delta_time = (elapsed_microseconds prev_time curr_time)
                     error = (((encoder_counts - prev_encoder_counts) * 1000) - ((target_speed * delta_time) / 1000))
                     correction = (compute_pid i error _motors__p_coeff _motors__i_coeff _motors__d_coeff)
-                    is_stuck = (and (encoder_counts == prev_encoder_counts) (target_speed != 0))
-                    if (is_stuck) {
-                        if (correction > 0) {
-                            effort = 1023
-                        } else {
-                            effort = -1023
-                        }
-                    } else {
-                        effort = (prev_effort + (correction / 1000))
-                    }
+                    keffort = (prev_keffort + correction)
                 } else {
-                    effort = ((1023 * target_speed) / _motors__max_speed)
+                    keffort = ((1023000 * target_speed) / _motors__max_speed)
                 }
-                comment 'Check that following is still wanted, just before commanding the motor.
-Also, if we are stuck then skip this update; the next update in hopes of a larger effort.'
                 if (i == 1) {
                     sayIt is_stuck
-                    printIt error effort
+                    printIt error keffort
                 }
+                comment 'Check that following is still wanted, just before commanding the motor.'
                 if (at i _motors__do_follow) {
-                    _basic_move_at_effort i effort
+                    _basic_move_at_effort i (keffort / 1000)
                     atPut i _motors__prev_follow_time curr_time
-                    atPut i _motors__prev_effort effort
+                    atPut i _motors__prev_keffort keffort
                     atPut i _motors__prev_encoder_counts encoder_counts
                 }
             }
