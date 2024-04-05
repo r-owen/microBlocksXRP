@@ -1,6 +1,6 @@
 module PID
 author Russell
-version 0 4
+version 0 5
 description 'PID Control Loop'
 variables _pid_initialized _pid__prev_error _pid__prev_time _pid__prev_integral 
 
@@ -38,8 +38,8 @@ to compute_pid index error p_coeff i_coeff d_coeff {
 • index: index of the PID loop
 • error: error to correct
 • p_coeff: proportional coefficient (corr/error)
-• i_coeff: integral coefficient (corr-seconds/error)
-• d_coeff: derivitive coefficient (corr/error-seconds)'
+• i_coeff: integral coefficient (corr-msec/error)
+• d_coeff: derivitive coefficient (corr/error-msec)'
   _extend_pid_lists index
   local 'p_value' 0
   local 'i_value' 0
@@ -53,8 +53,8 @@ to compute_pid index error p_coeff i_coeff d_coeff {
 Compute derivitive and integral contributions.'
     local 'delta_time' (elapsed_microseconds prev_time curr_time)
     local 'diff_error' (error - (at index _pid__prev_error))
-    d_value = (((d_coeff * diff_error) * 1000000) / delta_time)
-    integral = (((error * delta_time) / 1000000) + (at index _pid__prev_integral))
+    d_value = (((d_coeff * diff_error) * 1000) / delta_time)
+    integral = (((error * delta_time) / 1000) + (at index _pid__prev_integral))
     i_value = (i_coeff * integral)
   }
   atPut index _pid__prev_time curr_time
