@@ -1,20 +1,20 @@
 module 'DC Motors'
 author Russell
-version 0 4
+version 0 5
 description 'Drive DC motors with encoders'
 depends PID
-variables motors__encoder_counts _motors__num_motors _motors__max_speed _motors__left_index _motors__right_index _motors__pin_duty_cycle _motors__pin_encoder_a _motors__pin_encoder_b _motors__pin_direction _xrp_pin_input_voltage _motors__prev_encoder_a_state _motors__do_follow _motors__target_speed _motors__prev_follow_time _motors__prev_encoder_counts _motors__prev_keffort _motors__p_coeff _motors__i_coeff _motors__d_coeff
+variables motors__encoder_position _motors__num_motors _motors__max_speed _motors__left_index _motors__right_index _motors__pin_duty_cycle _motors__pin_encoder_a _motors__pin_encoder_b _motors__pin_direction _xrp_pin_input_voltage _motors__prev_encoder_a_state _motors__do_follow _motors__target_position _motors__p_coeff _motors__i_coeff _motors__d_coeff _motors__min_effort _motors__deadband
 
   spec ' ' 'init' 'init'
   spec ' ' '_init_common_variables' '_init_common_variables num_motors _' 'num' 2
   spec ' ' '_xrp_check_input_voltage' '_xrp_check_input_voltage'
   spec ' ' '_xrp_init_variables' '_xrp_init_variables num_motors _' 'num' 2
   spec ' ' 'monitor_encoders' 'monitor motor encoders'
-  spec ' ' 'drive_motors_to_follow_target_speed' 'drive motors to follow target speed'
+  spec ' ' 'drive_motors_to_follow_target_position' 'drive motors to follow target position'
   spec ' ' 'reset_motor_encoder' 'reset motor encoder index _' 'num' 1
   spec ' ' 'move_at_effort' 'move motor _ with effort _ (-1023 to 1023)' 'num num' 1 250
   spec ' ' '_basic_move_at_effort' '_basic_move_at_effort index _ effort _ (-1023 to 1023)' 'num num' 1 250
-  spec ' ' 'move_motor_at_speed' 'move motor _ at speed _ (encoder counts/sec)' 'num num' 1 500
+  spec ' ' 'move_motor_to_position' 'move motor _ to position _ (encoder counts)' 'num num' 1 585
   spec ' ' 'stop_all_motors' 'stop all motors'
   spec ' ' 'stop_motor' 'stop motor _' 'num' 1
 
@@ -32,12 +32,9 @@ Defaults to an XRP robot kit with 2 motors; change this code for other systems'
 
 to _init_common_variables num_motors {
     comment 'Initialize variables whose values do not depend on the type of system'
-    motors__encoder_counts = (newList num_motors 0)
+    motors__encoder_position = (newList num_motors 0)
     _motors__do_follow = (newList num_motors (booleanConstant false))
-    _motors__target_speed = (newList num_motors 0)
-    _motors__prev_follow_time = (newList num_motors -1)
-    _motors__prev_encoder_counts = (newList num_motors 0)
-    _motors__prev_keffort = (newList num_motors 0)
+    _motors__target_position = (newList num_motors 0)
 }
 
 to '_xrp_check_input_voltage' {
@@ -55,9 +52,11 @@ to '_xrp_init_variables' num_motors {
     }
     _motors__left_index = 1
     _motors__right_index = 2
-    _motors__p_coeff = 1
+    _motors__p_coeff = 10000
     _motors__i_coeff = 0
     _motors__d_coeff = 0
+    _motors__min_effort = 300
+    _motors__deadband = 10
     comment 'Approximate maximum motor speed (encoder counts/second) with no load'
     _motors__max_speed = 1080
     _motors__pin_encoder_a = (newList num_motors 0)
@@ -107,64 +106,49 @@ to monitor_encoders {
             if (encoder_a_state != prev_encoder_a_state) {
                 atPut i _motors__prev_encoder_a_state encoder_a_state
                 if (encoder_a_state == encoder_b_state) {
-                atPut i motors__encoder_counts ((at i motors__encoder_counts) - 1)
+                atPut i motors__encoder_position ((at i motors__encoder_position) - 1)
                 } else {
-                atPut i motors__encoder_counts ((at i motors__encoder_counts) + 1)
+                atPut i motors__encoder_position ((at i motors__encoder_position) + 1)
                 }
             }
         }
     }
 }
 
-to drive_motors_to_follow_target_speed {
+to drive_motors_to_follow_target_position {
     for i _motors__num_motors {
         reset_pid i
-        atPut i _motors__prev_keffort 0
-        atPut i _motors__prev_encoder_counts 0
-        atPut i _motors__prev_follow_time -1
     }
     init
     local target_speed 0
-    local encoder_counts 0
+    local encoder_position 0
     local error 0
     local correction 0
-    local keffort 0
+    local effort 0
     local curr_time 0
-    local prev_time 0
-    local prev_keffort 0
-    local prev_encoder_counts 0
-    local prev_keffort 0
-    local delta_time 0
-    local is_stuck (booleanConstant false)
     forever {
         for i _motors__num_motors {
-            target_speed = (at i _motors__target_speed)
-            prev_encoder_counts = (at i _motors__prev_encoder_counts)
-            encoder_counts = (at i motors__encoder_counts)
+            target_position = (at i _motors__target_position)
+            encoder_position = (at i motors__encoder_position)
             curr_time = (microsOp)
-            prev_time = (at i _motors__prev_follow_time)
-            prev_keffort = (at i _motors__prev_keffort)
             if (at i _motors__do_follow) {
-                is_stuck = (and (encoder_counts == prev_encoder_counts) (target_speed != 0))
-                if (prev_time >= 0) {
-                    comment 'Note: simple subtraction handles encoder wraparound automatically'
-                    delta_time = (elapsed_microseconds prev_time curr_time)
-                    error = (((encoder_counts - prev_encoder_counts) * 1000) - ((target_speed * delta_time) / 1000))
-                    correction = (compute_pid i error _motors__p_coeff _motors__i_coeff _motors__d_coeff)
-                    keffort = (prev_keffort + correction)
-                } else {
-                    keffort = ((1023000 * target_speed) / _motors__max_speed)
-                }
-                if (i == 1) {
-                    sayIt is_stuck
-                    printIt error keffort
-                }
+                comment 'Note: simple subtraction handles encoder wraparound automatically'
+                error = (encoder_position - target_position)
+                correction = (compute_pid i error _motors__p_coeff _motors__i_coeff _motors__d_coeff)
+                effort = (correction / 1000)
+                if (effort > 1023) {
+                    effort = 1023
+                } (effort < -1024) {
+                        effort = -1024
+                } (and (effort > _motors__deadband) (effort < _motors__min_effort)) {
+                    effort = _motors__min_effort
+                } (and (effort < -_motors__deadband) (effort > (-1 * _motors__min_effort))) {
+                    effort = (-1 * _motors__min_effort)
+                }   
+                printIt error effort
                 comment 'Check that following is still wanted, just before commanding the motor.'
                 if (at i _motors__do_follow) {
-                    _basic_move_at_effort i (keffort / 1000)
-                    atPut i _motors__prev_follow_time curr_time
-                    atPut i _motors__prev_keffort keffort
-                    atPut i _motors__prev_encoder_counts encoder_counts
+                    _basic_move_at_effort i effort
                 }
             }
         }
@@ -173,7 +157,7 @@ to drive_motors_to_follow_target_speed {
 
 to reset_motor_encoder index {
     init
-    atPut index motors__encoder_counts 0
+    atPut index motors__encoder_position 0
 }
 
 to move_at_effort index effort {
@@ -187,12 +171,12 @@ to _basic_move_at_effort index effort {
     digitalWriteOp (at index _motors__pin_direction) (effort > 0)
 }
 
-to move_motor_at_speed index speed {
-  comment 'Move the specified motor at constant speed, using the encoders.
-This simply sets the motor target speed and enable following (if not already enabled);
-for the motor to actually move, the drive_motors_to_follow_target_speed block must be running.'
+to move_motor_to_position index position {
+  comment 'Move the specified motor to the specified position (in encoder counts).
+This simply sets the motor target position and enables following (if not already enabled);
+for the motor to actually move, the drive_motors_to_follow_target_position block must be running.'
     init
-    atPut index _motors__target_speed speed
+    atPut index _motors__target_position position
     atPut index _motors__do_follow (booleanConstant true)
 }
 
