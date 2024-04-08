@@ -1,13 +1,14 @@
-module PID
-author Russell
-version 0 5
+module 'PID'
+author 'Russell Owen'
+version 0 6
 description 'PID Control Loop'
 variables _pid_initialized _pid__prev_error _pid__prev_time _pid__prev_integral 
 
   spec ' ' '_extend_pid_lists' '_extend pid lists; index _' 'num' 1
   spec ' ' '_init_pid_library' '_init_pid_library'
+  spec 'r' 'constrain_value' 'constrain value _ >= min _ <= max _' 'num num num' 0 -1000 1000
   spec 'r' 'elapsed_microseconds' 'elapsed_microseconds start_time _ end_time _' 'num num' 0 0
-  spec 'r' 'compute_pid' 'compute pid at index _ error _ p coeff _ i coeff _ d coeff _' 'num num num num num num' 1 0 1 0 0
+  spec 'r' 'compute_pid' 'compute pid at index _ error _ p coeff _ i coeff _ d coeff _ max integral _ (ignored if 0)' 'num num num num num num' 1 0 1 0 0 0
   spec ' ' 'reset_pid' 'reset pid at index _' 'num' 1
 
 to _extend_pid_lists index {
@@ -33,13 +34,24 @@ to _init_pid_library {
   }
 }
 
-to compute_pid index error p_coeff i_coeff d_coeff {
+to constrain_value value min_value max_value {
+    comment 'Constrain a value to be >= min and <= max'
+    if (value < min_value) {
+        return min_value
+    } (value > max_value) {
+        return max_value
+    }
+    return value
+}
+
+to compute_pid index error p_coeff i_coeff d_coeff max_integral {
   comment 'Compute the next PID correction value, using inputs:
-• index: index of the PID loop
-• error: error to correct
-• p_coeff: proportional coefficient (corr/error)
-• i_coeff: integral coefficient (corr-msec/error)
-• d_coeff: derivitive coefficient (corr/error-msec)'
+* index: index of the PID loop
+* error: error to correct
+* p_coeff: proportional coefficient (corr/error)
+* i_coeff: integral coefficient (corr-msec/error)
+* d_coeff: derivitive coefficient (corr/error-msec)
+* max_integral: maximum absolute value of the integrated error; ignored if 0'
   _extend_pid_lists index
   local 'p_value' 0
   local 'i_value' 0
@@ -49,12 +61,14 @@ to compute_pid index error p_coeff i_coeff d_coeff {
   local 'prev_time' (at index _pid__prev_time)
   p_value = (p_coeff * error)
   if (prev_time >= 0) {
-    comment 'We have old data for this PID loop.
-Compute derivitive and integral contributions.'
+    comment 'We have old data for this PID loop, so compute derivitive and integral contributions.'
     local 'delta_time' (elapsed_microseconds prev_time curr_time)
     local 'diff_error' (error - (at index _pid__prev_error))
     d_value = (((d_coeff * diff_error) * 1000) / delta_time)
     integral = (((error * delta_time) / 1000) + (at index _pid__prev_integral))
+    if (max_integral > 0) {
+        integral = (constrain_value integral (-1 * max_integral) max_integral)
+    }
     i_value = (i_coeff * integral)
   }
   atPut index _pid__prev_time curr_time
