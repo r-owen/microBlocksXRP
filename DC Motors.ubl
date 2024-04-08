@@ -1,9 +1,9 @@
 module 'DC Motors'
-author Russell
-version 0 5
+author 'Russell Owen'
+version 0 6
 description 'Drive DC motors with encoders'
 depends PID
-variables motors__encoder_position _motors__num_motors _motors__max_speed _motors__left_index _motors__right_index _motors__pin_duty_cycle _motors__pin_encoder_a _motors__pin_encoder_b _motors__pin_direction _xrp_pin_input_voltage _motors__prev_encoder_a_state _motors__do_follow _motors__target_position _motors__p_coeff _motors__i_coeff _motors__d_coeff _motors__min_effort _motors__deadband
+variables motors__encoder_position _motors__num_motors _motors__max_speed _motors__pin_duty_cycle _motors__pin_encoder_a _motors__pin_encoder_b _motors__pin_direction _xrp_pin_input_voltage _motors__prev_encoder_a_state _motors__do_follow _motors__target_position _motors__p_coeff _motors__i_coeff _motors__d_coeff _motors__min_effort _motors__deadband _motors__max_integral
 
   spec ' ' 'init' 'init'
   spec ' ' '_init_common_variables' '_init_common_variables num_motors _' 'num' 2
@@ -13,15 +13,16 @@ variables motors__encoder_position _motors__num_motors _motors__max_speed _motor
   spec ' ' 'drive_motors_to_follow_target_position' 'drive motors to follow target position'
   spec ' ' 'reset_motor_encoder' 'reset motor encoder index _' 'num' 1
   spec ' ' 'move_at_effort' 'move motor _ with effort _ (-1023 to 1023)' 'num num' 1 250
-  spec ' ' '_basic_move_at_effort' '_basic_move_at_effort index _ effort _ (-1023 to 1023)' 'num num' 1 250
+  spec ' ' 'move_motor_by_amount' 'move motor _ by amount _ (encoder counts)' 'num num' 1 585
   spec ' ' 'move_motor_to_position' 'move motor _ to position _ (encoder counts)' 'num num' 1 585
   spec ' ' 'stop_all_motors' 'stop all motors'
   spec ' ' 'stop_motor' 'stop motor _' 'num' 1
+  spec ' ' '_basic_move_at_effort' '_basic_move_at_effort index _ effort _ (-1023 to 1023)' 'num num' 1 250
 
 to init {
   comment 'Check motor power and initialize variables (if not already initialized).
 Defaults to an XRP robot kit with 2 motors; change this code for other systems'
-    local num_motors 2
+    local 'num_motors' 2
     if (_motors__num_motors != num_motors) {
         _init_common_variables num_motors
         _xrp_init_variables num_motors
@@ -50,13 +51,12 @@ to '_xrp_init_variables' num_motors {
         sayIt 'Number of motors must be 2-4'
         return
     }
-    _motors__left_index = 1
-    _motors__right_index = 2
-    _motors__p_coeff = 10000
+    _motors__p_coeff = 5000
     _motors__i_coeff = 0
     _motors__d_coeff = 0
-    _motors__min_effort = 300
+    _motors__min_effort = 200
     _motors__deadband = 10
+    _motors__max_integral = 10
     comment 'Approximate maximum motor speed (encoder counts/second) with no load'
     _motors__max_speed = 1080
     _motors__pin_encoder_a = (newList num_motors 0)
@@ -120,12 +120,13 @@ to drive_motors_to_follow_target_position {
         reset_pid i
     }
     init
-    local target_speed 0
-    local encoder_position 0
-    local error 0
-    local correction 0
-    local effort 0
-    local curr_time 0
+    local 'target_speed' 0
+    local 'encoder_position' 0
+    local 'error' 0
+    local 'correction' 0
+    local 'effort' 0
+    local 'raw_effort' 0
+    local 'curr_time' 0
     forever {
         for i _motors__num_motors {
             target_position = (at i _motors__target_position)
@@ -134,18 +135,23 @@ to drive_motors_to_follow_target_position {
             if (at i _motors__do_follow) {
                 comment 'Note: simple subtraction handles encoder wraparound automatically'
                 error = (encoder_position - target_position)
-                correction = (compute_pid i error _motors__p_coeff _motors__i_coeff _motors__d_coeff)
+                correction = (compute_pid i error _motors__p_coeff _motors__i_coeff _motors__d_coeff _motors__max_integral)
                 effort = (correction / 1000)
-                if (effort > 1023) {
+                raw_effort = effort
+                if ((absoluteValue effort) <= _motors__deadband) {
+                    effort = 0
+                } (effort > 1023) {
                     effort = 1023
                 } (effort < -1024) {
-                        effort = -1024
-                } (and (effort > _motors__deadband) (effort < _motors__min_effort)) {
-                    effort = _motors__min_effort
-                } (and (effort < -_motors__deadband) (effort > (-1 * _motors__min_effort))) {
-                    effort = (-1 * _motors__min_effort)
-                }   
-                printIt error effort
+                    effort = -1024
+                } ((absoluteValue effort) < _motors__min_effort) {
+                    if (effort < 0) {
+                        effort = (-1 * _motors__min_effort)
+                    } else {
+                        effort = _motors__min_effort
+                    }
+                }
+                printIt error effort raw_effort
                 comment 'Check that following is still wanted, just before commanding the motor.'
                 if (at i _motors__do_follow) {
                     _basic_move_at_effort i effort
@@ -165,10 +171,10 @@ to move_at_effort index effort {
     _basic_move_at_effort index effort
 }
 
-to _basic_move_at_effort index effort {
-    comment 'Implement move_at_effort, assuming init has been called'
-    analogWriteOp (at index _motors__pin_duty_cycle) (absoluteValue effort)
-    digitalWriteOp (at index _motors__pin_direction) (effort > 0)
+to move_motor_by_amount index amount {
+    comment 'Move the specified motor by the specified amount (in encoder counts).'
+    init
+    move_motor_to_position index ((at index motors__encoder_position) + amount)
 }
 
 to move_motor_to_position index position {
@@ -190,4 +196,10 @@ to stop_motor index {
     init
     atPut index _motors__do_follow (booleanConstant false)
     analogWriteOp (at index _motors__pin_duty_cycle) 0
+}
+
+to _basic_move_at_effort index effort {
+    comment 'Implement move_at_effort, assuming init has been called'
+    analogWriteOp (at index _motors__pin_duty_cycle) (absoluteValue effort)
+    digitalWriteOp (at index _motors__pin_direction) (effort > 0)
 }
