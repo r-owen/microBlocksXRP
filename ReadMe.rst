@@ -65,9 +65,13 @@ The main blocks are:
 * ``drive_motors_to_follow_target_position``: a background task to drive the motors to follow a target specified by other blocks.
   You must start this block before calling ``move_motor_by_amount`` or ``move_motor_to_position``.
   It is an infinite loop, so please do not put any other blocks after it.
-* ``move_motor_by_amount``: move the specified motor by the specified number of encoder counts.
-  This requires that ``monitor_encoders`` and ``drive_motors_to_follow_target_position`` are both running.
-* ``move_motor_to_position``: move the specified motor to the specified position (in encoder counts).
-  This requires that ``monitor_encoders`` and ``drive_motors_to_follow_target_position`` are both running.
 * ``stop_all_motors``: stop all motors.
 * ``stop_motor``: stop the specified motor.
+
+Plus the following, which all require that ``monitor_encoders`` and ``drive_motors_to_follow_target_position`` are both running:
+
+* ``move_motor_by_amount``: move the specified motor by the specified number of encoder counts.
+* ``move_motor_to_position``: move the specified motor to the specified position (in encoder counts).
+* ``set_motor_speed``: move the specified motor at constant speed (in encoder counts/second), starting at the current measured position.
+* ``set_motor_target``: a lower-level block that allows you to set the target position (encoder counts), speed (encoder counts/second), and starting time (milliseconds, -1 for "now").
+  The blocks above it all call this method.
