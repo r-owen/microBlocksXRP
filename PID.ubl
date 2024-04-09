@@ -7,7 +7,7 @@ variables _pid_initialized _pid__prev_error _pid__prev_time _pid__prev_integral
   spec ' ' '_extend_pid_lists' '_extend pid lists; index _' 'num' 1
   spec ' ' '_init_pid_library' '_init_pid_library'
   spec 'r' 'constrain_value' 'constrain value _ >= min _ <= max _' 'num num num' 0 -1000 1000
-  spec 'r' 'elapsed_microseconds' 'elapsed_microseconds start_time _ end_time _' 'num num' 0 0
+  spec 'r' 'elapsed_time' 'elapsed_time start_time _ end_time _' 'num num' 0 0
   spec 'r' 'compute_pid' 'compute pid at index _ error _ p coeff _ i coeff _ d coeff _ max integral _ (ignored if 0)' 'num num num num num num' 1 0 1 0 0 0
   spec ' ' 'reset_pid' 'reset pid at index _' 'num' 1
 
@@ -57,15 +57,15 @@ to compute_pid index error p_coeff i_coeff d_coeff max_integral {
   local 'i_value' 0
   local 'd_value' 0
   local 'integral' 0
-  local 'curr_time' (microsOp)
+  local 'curr_time' (millisOp)
   local 'prev_time' (at index _pid__prev_time)
   p_value = (p_coeff * error)
   if (prev_time >= 0) {
     comment 'We have old data for this PID loop, so compute derivitive and integral contributions.'
-    local 'delta_time' (elapsed_microseconds prev_time curr_time)
+    local 'delta_time' (elapsed_time prev_time curr_time)
     local 'diff_error' (error - (at index _pid__prev_error))
-    d_value = (((d_coeff * diff_error) * 1000) / delta_time)
-    integral = (((error * delta_time) / 1000) + (at index _pid__prev_integral))
+    d_value = ((d_coeff * diff_error) / delta_time)
+    integral = ((error * delta_time) + (at index _pid__prev_integral))
     if (max_integral > 0) {
         integral = (constrain_value integral (-1 * max_integral) max_integral)
     }
@@ -77,10 +77,10 @@ to compute_pid index error p_coeff i_coeff d_coeff max_integral {
   return (-1 * (p_value + (i_value + d_value)))
 }
 
-to elapsed_microseconds start_time end_time {
-  comment 'Safely compute an elapsed time from two microsecond clock values,  
-taking into account the fact that the microsecond clock wraps from 1073741823 to 0.
-Warning: does not work for the millisecond clock, because that wraps at a different (smaller) value.'
+to elapsed_time start_time end_time {
+  comment 'Safely compute an elapsed time from two microsecond or millisecond clock values,  
+taking into account the fact that the clocks wrap from 1073741823 to 0.
+Warning: requires prerelease firmware for milliseconds; the millisecond clock in release firmware wraps at a smaller value.'
   local 'delta_time' (end_time - start_time)
   if (delta_time < 0) {
     delta_time += -1073741824
