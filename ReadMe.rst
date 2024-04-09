@@ -29,20 +29,24 @@ The main blocks are:
 * ``reset_pid``: reset the specified PID loop.
   It may be useful to reset a PID before commanding a new move.
 
-* ``constrain_value``: limit the range of a value, truncating as needed.
-  This may be used to constrain the value returned by ``compute_pid`` to reasonable values.
+* ``constrain_value``: limit the range of a value, intended to post-process a scaled correction from a PID loop.
+  This may be used to constrain the correction returned by ``compute_pid`` to useful values.
+  The algorithm is as follows (where ``|value|`` means the absolute value of ``value``):
+
+  * If ``|value| < deadband``: return 0.
+    This can keep the system from jittering or whining after a move.
+  * If ``|value| < minimum``: return ``minimum`` with the sign of ``value``.
+    This prevents applying a correction that is too small to do anything useful.
+    For example the WPI XRP motor drives cannot reliably move when the effort is less than about 200.
+  * If ``|value| > maximum``: return ``maximum`` with the sign of ``value``.'
+    This prevents applying more correction than the system can handle.
+    For example the WPI XRP motor drives have a maximum "effort" of 1023.
 
 Recommendations for using ``compute_pid``:
 
 * In order to allow tuning flexibility, use a ``p_coeff`` significantly larger than 1 (e.g. 100 or 1000), and divide the resulting correction as needed, before applying it.
   (This helps compensate for the lack of floating=point values in microBlocks).
-* Limit the returned correction to sane values, perhaps using ``constrain_value``.
-* For some motors you may find that tiny corrections have no effect (but may make the motors whine), and that somewhat larger corrections are unreliable (e.g. due to friction).
-  Two ways to help this situation:
-
-  * If the correction is so tiny as to be useless, change it to 0.
-  * If the correction is in an intermediate range, where it might be useful but is not reliable, increase it as needed.
-
+* Limit the resulting correction to reasonable values using ``constrain_value``.
 * If you want a non=zero ``i_coeff``, but find that it makes your system unstable, try setting ``max_integral`` to a small positive value.
 
 
@@ -53,9 +57,9 @@ Control DC motors that have incremental encoders.
 Each motor is specified by a different index: 1, 2, 3...
 This library requires the ``PID.ubl`` library.
 
-In order to use this library to control a specific board (such as the WPI XRP robot kit) you must override the ``init`` method to set various global variables (all of whose names start with _motors__); see the provided example (which is for the WPI XRP robot kit) for more information.
+In order to use this library to control a specific board (such as the WPI XRP robot kit) you must override the ``_init_dcm_library`` method to set various global variables (all of whose names start with _motors__); see the provided example (which is for the WPI XRP robot kit) for more information.
 We suggest that you write a separate library for each board you wish to support, so users do not have to figure out the init override.
-The provided ``init`` is for the WPI XRP robot kit, and assumes the user has only 2 motors (even though the board supports 4).
+The provided ``_init_dcm_library`` is for the WPI XRP robot kit, and assumes the user has only 2 motors (because the standard kit only has two, even though the board supports 4).
 
 The main blocks are:
 
@@ -68,7 +72,7 @@ The main blocks are:
 * ``stop_all_motors``: stop all motors.
 * ``stop_motor``: stop the specified motor.
 
-Plus the following, which all require that ``monitor_encoders`` and ``drive_motors_to_follow_target_position`` are both running:
+The following main blocks all require that ``monitor_encoders`` and ``drive_motors_to_follow_target_position`` are both running:
 
 * ``move_motor_by_amount``: move the specified motor by the specified number of encoder counts.
 * ``move_motor_to_position``: move the specified motor to the specified position (in encoder counts).
