@@ -1,12 +1,13 @@
 module 'PID'
 author 'Russell Owen'
-version 0 6
+version 0 7
 description 'PID Control Loop'
-variables _pid_initialized _pid__prev_error _pid__prev_time _pid__prev_integral 
+variables _pid__initialized _pid__prev_error _pid__prev_time _pid__prev_integral 
 
   spec ' ' '_extend_pid_lists' '_extend pid lists; index _' 'num' 1
   spec ' ' '_init_pid_library' '_init_pid_library'
-  spec 'r' 'constrain_value' 'constrain value _ >= min _ <= max _' 'num num num' 0 -1000 1000
+  spec 'r' 'apply_sign' 'apply sign _ to value _' 'num num' 1 0
+  spec 'r' 'constrain_value' 'constrain value _ deadband _ minimum _ maximum _' 'num num num num' 0 0 0 1000
   spec 'r' 'elapsed_time' 'elapsed_time start_time _ end_time _' 'num num' 0 0
   spec 'r' 'compute_pid' 'compute pid at index _ error _ p coeff _ i coeff _ d coeff _ max integral _ (ignored if 0)' 'num num num num num num' 1 0 1 0 0 0
   spec ' ' 'reset_pid' 'reset pid at index _' 'num' 1
@@ -26,26 +27,42 @@ This must be called by every public block.'
 to _init_pid_library {
   comment 'Create global lists. Must be called by every public block,
   but that can be accomplished by calling _extend_pid_lists.'
-  if (not _pid_initialized) {
+  if (not _pid__initialized) {
     _pid__prev_error = (newList 0)
     _pid__prev_time = (newList 0)
     _pid__prev_integral = (newList 0)
-    _pid_initialized = true
+    _pid__initialized = (booleanConstant true)
   }
 }
 
-to constrain_value value min_value max_value {
-    comment 'Constrain a value to be >= min and <= max'
-    if (value < min_value) {
-        return min_value
-    } (value > max_value) {
-        return max_value
+to apply_sign sign value {
+    comment 'If sign < 0 return -value else return value'
+    if (sign < 0) {
+        return (-1 * value)
+    } else {
+        return value
     }
-    return value
+}
+
+to constrain_value value deadband minimum maximum {
+    comment 'Constrain a value as follows:
+If |value| < deadband: return 0.
+If |value| < minimum: return minimum with sign of value.
+If |value| > maximum: return maximum with sign of value.'
+    local abs_value (absoluteValue value)
+    if (abs_value < deadband) {
+        return 0
+    } (abs_value < minimum) {
+        return (apply_sign value minimum)
+    } (abs_value > maximum) {
+        return (apply_sign value maximum)
+    } else {
+        return value
+    }
 }
 
 to compute_pid index error p_coeff i_coeff d_coeff max_integral {
-  comment 'Compute the next PID correction value, using inputs:
+  comment 'Compute the next PID value value, using inputs:
 * index: index of the PID loop
 * error: error to correct
 * p_coeff: proportional coefficient (corr/error)
@@ -57,17 +74,17 @@ to compute_pid index error p_coeff i_coeff d_coeff max_integral {
   local 'i_value' 0
   local 'd_value' 0
   local 'integral' 0
-  local 'curr_time' (millisOp)
+  local 'curr_time' (microsOp)
   local 'prev_time' (at index _pid__prev_time)
   p_value = (p_coeff * error)
   if (prev_time >= 0) {
     comment 'We have old data for this PID loop, so compute derivitive and integral contributions.'
     local 'delta_time' (elapsed_time prev_time curr_time)
     local 'diff_error' (error - (at index _pid__prev_error))
-    d_value = ((d_coeff * diff_error) / delta_time)
-    integral = ((error * delta_time) + (at index _pid__prev_integral))
-    if (max_integral > 0) {
-        integral = (constrain_value integral (-1 * max_integral) max_integral)
+    d_value = (((d_coeff * diff_error) * 1000) / delta_time)
+    integral = (((error * delta_time) / 1000) + (at index _pid__prev_integral))
+    if (and (max_integral > 0) ((absoluteValue max_integral) > max_integral)) {
+        integral = (apply_sign integral max_integral)
     }
     i_value = (i_coeff * integral)
   }
@@ -90,7 +107,7 @@ Warning: requires prerelease firmware for milliseconds; the millisecond clock in
 
 to reset_pid index {
   comment 'Zero the recorded error data for a specific PID loop.
-Call this before starting each move, to avoid unwanted corrections
+Call this before starting each move, to avoid unwanted values
 from the integral and derivitive terms.'
   _extend_pid_lists index
   atPut index _pid__prev_error 0
