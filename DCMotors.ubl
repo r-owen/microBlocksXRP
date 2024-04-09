@@ -1,9 +1,9 @@
 module 'DCMotors'
 author 'Russell Owen'
-version 0 9
+version 0 10
 description 'Drive DC motors with encoders'
 depends PID
-variables motors__encoder_position _dcmotors__initialized _dcmotors__num_motors _dcmotors__max_speed _dcmotors__pin_duty_cycle _dcmotors__pin_encoder_a _dcmotors__pin_encoder_b _dcmotors__pin_direction _dcmotors__prev_encoder_a_state _dcmotors__target_time _dcmotors__target_position _dcmotors__target_speed _dcmotors__p_coeff _dcmotors__i_coeff _dcmotors__d_coeff _dcmotors__deadband _dcmotors__min_effort _dcmotors__max_effort _dcmotors__max_integral
+variables motors__encoder_position _dcmotors__initialized _dcmotors__num_motors _dcmotors__max_speed _dcmotors__pin_duty_cycle _dcmotors__pin_encoder_a _dcmotors__pin_encoder_b _dcmotors__pin_direction _dcmotors__prev_encoder_a_state _dcmotors__prev_encoder_b_state _dcmotors__target_time _dcmotors__target_position _dcmotors__target_speed _dcmotors__p_coeff _dcmotors__i_coeff _dcmotors__d_coeff _dcmotors__deadband _dcmotors__min_effort _dcmotors__max_effort _dcmotors__max_integral
 
   spec ' ' '_init_dcmotors_library' '_init_dcmotors_library'
   spec ' ' '_init_dcmotors_variables' '_init_dcmotors_variables'
@@ -44,6 +44,7 @@ and create all lists (but do not set values) of variables that are system-specif
     _dcmotors__target_position = (newList _dcmotors__num_motors 0)
     _dcmotors__target_speed = (newList _dcmotors__num_motors 0)
     _dcmotors__prev_encoder_a_state = (newList _dcmotors__num_motors (booleanConstant false))
+    _dcmotors__prev_encoder_b_state = (newList _dcmotors__num_motors (booleanConstant false))
     comment 'The following lists are system specific, so their elements must be set elsewhere.'
     _dcmotors__pin_encoder_a = (newList _dcmotors__num_motors 0)
     _dcmotors__pin_encoder_b = (newList _dcmotors__num_motors 0)
@@ -62,17 +63,26 @@ to monitor_encoders {
     local 'encoder_a_state' (booleanConstant false)
     local 'encoder_b_state' (booleanConstant false)
     local 'prev_encoder_a_state' (booleanConstant false)
+    local 'prev_encoder_b_state' (booleanConstant false)
     forever {
         for i _dcmotors__num_motors {
             encoder_a_state = (digitalReadOp (at i _dcmotors__pin_encoder_a))
             encoder_b_state = (digitalReadOp (at i _dcmotors__pin_encoder_b))
             prev_encoder_a_state = (at i _dcmotors__prev_encoder_a_state)
+            prev_encoder_b_state = (at i _dcmotors__prev_encoder_b_state)
             if (encoder_a_state != prev_encoder_a_state) {
                 atPut i _dcmotors__prev_encoder_a_state encoder_a_state
                 if (encoder_a_state == encoder_b_state) {
-                atPut i motors__encoder_position ((at i motors__encoder_position) - 1)
+                    atPut i motors__encoder_position ((at i motors__encoder_position) - 1)
                 } else {
-                atPut i motors__encoder_position ((at i motors__encoder_position) + 1)
+                    atPut i motors__encoder_position ((at i motors__encoder_position) + 1)
+                }
+            } (encoder_b_state != prev_encoder_b_state) {
+                atPut i _dcmotors__prev_encoder_b_state encoder_b_state
+                if (encoder_a_state == encoder_b_state) {
+                    atPut i motors__encoder_position ((at i motors__encoder_position) + 1)
+                } else {
+                    atPut i motors__encoder_position ((at i motors__encoder_position) - 1)
                 }
             }
         }
