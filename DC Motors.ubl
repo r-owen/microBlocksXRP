@@ -1,9 +1,9 @@
 module 'DC Motors'
 author 'Russell Owen'
-version 0 6
+version 0 7
 description 'Drive DC motors with encoders'
 depends PID
-variables motors__encoder_position _motors__num_motors _motors__max_speed _motors__pin_duty_cycle _motors__pin_encoder_a _motors__pin_encoder_b _motors__pin_direction _xrp_pin_input_voltage _motors__prev_encoder_a_state _motors__do_follow _motors__target_position _motors__p_coeff _motors__i_coeff _motors__d_coeff _motors__min_effort _motors__deadband _motors__max_integral
+variables motors__encoder_position _motors__num_motors _motors__max_speed _motors__pin_duty_cycle _motors__pin_encoder_a _motors__pin_encoder_b _motors__pin_direction _xrp_pin_input_voltage _motors__prev_encoder_a_state _motors__target_time _motors__target_position _motors__target_speed _motors__p_coeff _motors__i_coeff _motors__d_coeff _motors__min_effort _motors__deadband _motors__max_integral
 
   spec ' ' 'init' 'init'
   spec ' ' '_init_common_variables' '_init_common_variables num_motors _' 'num' 2
@@ -15,6 +15,8 @@ variables motors__encoder_position _motors__num_motors _motors__max_speed _motor
   spec ' ' 'move_at_effort' 'move motor _ with effort _ (-1023 to 1023)' 'num num' 1 250
   spec ' ' 'move_motor_by_amount' 'move motor _ by amount _ (encoder counts)' 'num num' 1 585
   spec ' ' 'move_motor_to_position' 'move motor _ to position _ (encoder counts)' 'num num' 1 585
+  spec ' ' 'set_motor_speed' 'set motor _ speed _ (encoder counts/sec)' 'num num' 1 0
+  spec ' ' 'set_motor_target' 'set motor _ target position _  (encoder counts) speed _  (encoder counts/sec) time _ (milliseconds, now if <0)' 'num num num num' 1 0 0 -1
   spec ' ' 'stop_all_motors' 'stop all motors'
   spec ' ' 'stop_motor' 'stop motor _' 'num' 1
   spec ' ' '_basic_move_at_effort' '_basic_move_at_effort index _ effort _ (-1023 to 1023)' 'num num' 1 250
@@ -34,8 +36,9 @@ Defaults to an XRP robot kit with 2 motors; change this code for other systems'
 to _init_common_variables num_motors {
     comment 'Initialize variables whose values do not depend on the type of system'
     motors__encoder_position = (newList num_motors 0)
-    _motors__do_follow = (newList num_motors (booleanConstant false))
+    _motors__target_time = (newList num_motors -1)
     _motors__target_position = (newList num_motors 0)
+    _motors__target_speed = (newList num_motors 0)
 }
 
 to '_xrp_check_input_voltage' {
@@ -120,22 +123,26 @@ to drive_motors_to_follow_target_position {
         reset_pid i
     }
     init
+    local 'target_time' -1
     local 'target_speed' 0
     local 'encoder_position' 0
-    local 'error' 0
+    local 'position_error' 0
     local 'correction' 0
     local 'effort' 0
     local 'raw_effort' 0
-    local 'curr_time' 0
+    local 'delta_time' 0
+    local 'delta_position' 0
     forever {
         for i _motors__num_motors {
-            target_position = (at i _motors__target_position)
-            encoder_position = (at i motors__encoder_position)
-            curr_time = (microsOp)
-            if (at i _motors__do_follow) {
+            target_time = (at i _motors__target_time)
+            if (target_time >= 0) {
+                delta_time = (elapsed_time target_time (millisOp))
+                delta_position = ((delta_time * (at i _motors__target_speed)) / 1000)
+                target_position = ((at i _motors__target_position) + delta_position)
+                encoder_position = (at i motors__encoder_position)
                 comment 'Note: simple subtraction handles encoder wraparound automatically'
-                error = (encoder_position - target_position)
-                correction = (compute_pid i error _motors__p_coeff _motors__i_coeff _motors__d_coeff _motors__max_integral)
+                position_error = (encoder_position - target_position)
+                correction = (compute_pid i position_error _motors__p_coeff _motors__i_coeff _motors__d_coeff _motors__max_integral)
                 effort = (correction / 1000)
                 raw_effort = effort
                 if ((absoluteValue effort) <= _motors__deadband) {
@@ -151,9 +158,9 @@ to drive_motors_to_follow_target_position {
                         effort = _motors__min_effort
                     }
                 }
-                printIt error effort raw_effort
+                printIt target_position position_error effort raw_effort
                 comment 'Check that following is still wanted, just before commanding the motor.'
-                if (at i _motors__do_follow) {
+                if ((at i _motors__target_time) >= 0) {
                     _basic_move_at_effort i effort
                 }
             }
@@ -174,7 +181,7 @@ to move_at_effort index effort {
 to move_motor_by_amount index amount {
     comment 'Move the specified motor by the specified amount (in encoder counts).'
     init
-    move_motor_to_position index ((at index motors__encoder_position) + amount)
+    set_motor_target index ((at index motors__encoder_position) + amount) 0 -1
 }
 
 to move_motor_to_position index position {
@@ -182,8 +189,26 @@ to move_motor_to_position index position {
 This simply sets the motor target position and enables following (if not already enabled);
 for the motor to actually move, the drive_motors_to_follow_target_position block must be running.'
     init
+    set_motor_target index position 0 -1
+}
+
+to set_motor_speed index speed {
+    comment 'Move the specified motor at the specified speed'
+    init
+    set_motor_target index (at index motors__encoder_position) speed -1
+}
+
+to set_motor_target index position speed time {
+    init
+    if (time < 0) {
+        time = (millisOp)
+    }
+    comment 'Always start by setting time < 0, then speed = 0, to make race conflicts less problematic'
+    atPut index _motors__target_time -1
+    atPut index _motors__target_speed 0
     atPut index _motors__target_position position
-    atPut index _motors__do_follow (booleanConstant true)
+    atPut index _motors__target_speed speed
+    atPut index _motors__target_time time
 }
 
 to stop_all_motors {
@@ -194,7 +219,8 @@ to stop_all_motors {
 
 to stop_motor index {
     init
-    atPut index _motors__do_follow (booleanConstant false)
+    atPut index _motors__target_time -1
+    atPut index _motors__target_speed 0
     analogWriteOp (at index _motors__pin_duty_cycle) 0
 }
 
