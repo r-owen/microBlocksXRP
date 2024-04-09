@@ -50,32 +50,46 @@ Recommendations for using ``compute_pid``:
 * If you want a non=zero ``i_coeff``, but find that it makes your system unstable, try setting ``max_integral`` to a small positive value.
 
 
-DC Motors.ubl
-=============
+DCMotors.ubl
+============
 
 Control DC motors that have incremental encoders.
 Each motor is specified by a different index: 1, 2, 3...
 This library requires the ``PID.ubl`` library.
 
-In order to use this library to control a specific board (such as the WPI XRP robot kit) you must override the ``_init_dcm_library`` method to set various global variables (all of whose names start with _motors__); see the provided example (which is for the WPI XRP robot kit) for more information.
-We suggest that you write a separate library for each board you wish to support, so users do not have to figure out the init override.
-The provided ``_init_dcm_library`` is for the WPI XRP robot kit, and assumes the user has only 2 motors (because the standard kit only has two, even though the board supports 4).
+This library must be configured by a board-specific library in order to control that board.
+The board-specific library must define the following blocks (which take no arguments):
 
-The main blocks are:
+* ``get_num_motors``: return the number of DC motors supported by your system.
+* ``_init_dcmotors_system_variables``: initialize system-specific DCMotors variables.
+
+See ``XRP.ubl`` for an example.
+
+The main DCMotors blocks fall into several categories:
+
+Background tasks.
+These must be running in order to use most other blocks.
+They are infinite loops, so you must not put any blocks after them.
 
 * ``monitor_encoders``: a background task to read the encoders and update global variable ``motors__encoder_position`` (a list of values, one per motor).
-  You must start this block before doing anything that uses the encoders.
-  It is an infinite loop, so please do not put any other blocks after it.
 * ``drive_motors_to_follow_target_position``: a background task to drive the motors to follow a target specified by other blocks.
-  You must start this block before calling ``move_motor_by_amount`` or ``move_motor_to_position``.
-  It is an infinite loop, so please do not put any other blocks after it.
-* ``stop_all_motors``: stop all motors.
-* ``stop_motor``: stop the specified motor.
 
-The following main blocks all require that ``monitor_encoders`` and ``drive_motors_to_follow_target_position`` are both running:
+Blocks that only work if the background tasks are running:
 
 * ``move_motor_by_amount``: move the specified motor by the specified number of encoder counts.
 * ``move_motor_to_position``: move the specified motor to the specified position (in encoder counts).
 * ``set_motor_speed``: move the specified motor at constant speed (in encoder counts/second), starting at the current measured position.
-* ``set_motor_target``: a lower-level block that allows you to set the target position (encoder counts), speed (encoder counts/second), and starting time (milliseconds, -1 for "now").
+* ``_set_motor_target``: an advanced block that allows you to set the target position (encoder counts), speed (encoder counts/second), and starting time (milliseconds, -1 for "now").
   The blocks above it all call this method.
+  This is an advanced block because it is hard to use correctly (easy to be surprised by what it does).
+
+Blocks which work even if the background tasks are not running:
+
+* ``stop_all_motors``: stop all motors.
+* ``stop_motor``: stop the specified motor.
+
+XRP
+===
+
+Control the WPI XRP robot.
+The non-wheel-related code was originally written by Steve Spaeth.
