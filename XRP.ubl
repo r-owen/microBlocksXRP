@@ -1,0 +1,100 @@
+module 'XRP'
+author 'Russell Owen'
+version 0 1
+description 'Drive the WPI XRP robot'
+depends DCMotors Servo 'Distance (HC-SR04)'
+variables none_yet
+
+  spec ' ' '_dcmotors_check_system' '_dcmotors_check_system'
+  spec ' ' '_init_dcmotors_system_variables' '_init_dcmotors_system_variables'
+  spec ' ' 'drive_distance' 'drive distance _ (encoder counts)' 'num' 100
+  spec 'r' 'get_num_motors' '_get_num_motors'
+  spec 'r' 'read_user_button' 'read user button'
+  spec 'r' 'read_distance_sensor' 'read distance sensor (cm)'
+  spec 'r' 'read_line_sensors' 'read line sensors L,R (raw)'
+  spec ' ' 'set_servo' 'set servo _ to angle _ (degrees)' 'num num' 1 0
+  spec ' ' 'turn_angle' 'turn angle _ (degrees)' 'num' 90
+
+to '_dcmotors_check_system' {
+    comment 'Check the XRP board's drive power'
+    repeatUntil ((analogReadOp 28) >= 300) {
+        sayIt 'Insufficient drive voltage; check the power switch and batteries.'
+    }
+    sayIt ''
+}
+
+to '_init_dcmotors_system_variables' {
+    comment 'Set system-specific motors variables.
+Assume that _init_dcmotors_variables has been called, so that all lists exist.'
+    if ((_dcmotors__num_motors < 2) or (_dcmotors__num_motors > 4)) {
+        sayIt 'Number of motors must be 2-4'
+        return
+    }
+    _dcmotors__p_coeff = 2000
+    _dcmotors__i_coeff = 0
+    _dcmotors__d_coeff = 0
+    _dcmotors__deadband = 10
+    _dcmotors__min_effort = 200
+    _dcmotors__max_effort = 1023
+    _dcmotors__max_integral = 10
+    comment 'Approximate maximum motor speed (encoder counts/second) with no load'
+    _dcmotors__max_speed = 1080
+    atPut 1 _dcmotors__pin_encoder_a 4
+    atPut 1 _dcmotors__pin_encoder_b 5
+    atPut 1 _dcmotors__pin_direction 6
+    atPut 1 _dcmotors__pin_duty_cycle 7
+    atPut 2 _dcmotors__pin_encoder_a 12
+    atPut 2 _dcmotors__pin_encoder_b 13
+    atPut 2 _dcmotors__pin_direction 14
+    atPut 2 _dcmotors__pin_duty_cycle 15
+    if (_dcmotors__num_motors > 2) {
+        atPut 3 _dcmotors__pin_encoder_a 0
+        atPut 3 _dcmotors__pin_encoder_b 1
+        atPut 3 _dcmotors__pin_direction 2
+        atPut 3 _dcmotors__pin_duty_cycle 3
+    }
+    if (_dcmotors__num_motors > 3) {
+        atPut 4 _dcmotors__pin_encoder_a 8
+        atPut 4 _dcmotors__pin_encoder_b 9
+        atPut 4 _dcmotors__pin_direction 10
+        atPut 4 _dcmotors__pin_duty_cycle 11
+    }
+}
+
+to drive_distance distance {
+    move_motor_by_amount 1 distance
+    move_motor_by_amount 2 (-1 * distance)
+}
+
+to 'get_num_motors' {
+    return 2
+}
+
+to 'read_distance_sensor' {
+  comment 'Return the distance (cm) read by the HC-SR04 distance sensor.'
+  return ('distance (cm)' 20 21)
+}
+
+to read_line_sensors {
+  return ('[data:makeList]' (analogReadOp 26) (analogReadOp 27))
+}
+
+to read_user_button {
+  return (not (digitalReadOp 22))
+}
+
+to set_servo index angle {
+  _dcmotors_check_system
+  if (index == 1) {
+    setServoAngle 16 angle
+  } (index == 2) {
+    setServoAngle 17 angle
+  } else {
+    sayIt 'Invalid servo index; must be 1 or 2'
+  }
+}
+
+to turn_angle angle {
+    move_motor_by_amount 1 ((41978 * angle) / 10000)
+    move_motor_by_amount 2 ((41978 * angle) / 10000)
+}
