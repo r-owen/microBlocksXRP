@@ -37,6 +37,7 @@ Assume that _init_dcmotors_variables has been called, so that all lists exist.'
     _dcmotors__min_effort = 200
     _dcmotors__max_effort = 1023
     _dcmotors__max_integral = 10
+    _dcmotors__max_derivitive = 1
     comment 'Approximate maximum motor speed (encoder counts/second) with no load'
     _dcmotors__max_speed = 1080
     atPut 1 _dcmotors__pin_encoder_a 4

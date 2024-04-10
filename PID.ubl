@@ -9,7 +9,7 @@ variables _pid__initialized _pid__prev_error _pid__prev_time _pid__prev_integral
   spec 'r' 'apply_sign' 'apply sign _ to value _' 'num num' 1 0
   spec 'r' 'constrain_value' 'constrain value _ deadband _ minimum _ maximum _' 'num num num num' 0 0 0 1000
   spec 'r' 'elapsed_time' 'elapsed_time start_time _ end_time _' 'num num' 0 0
-  spec 'r' 'compute_pid' 'compute pid at index _ error _ p coeff _ i coeff _ d coeff _ max integral _ (ignored if 0)' 'num num num num num num' 1 0 1 0 0 0
+  spec 'r' 'compute_pid' 'compute pid at index _ error _ p coeff _ i coeff _ d coeff _ max integral _ (ignored if 0) max derivitive _ (ignored if 0)' 'num num num num num num num' 1 0 1 0 0 0 0
   spec ' ' 'reset_pid' 'reset pid at index _' 'num' 1
 
 to _extend_pid_lists index {
@@ -61,14 +61,15 @@ If |value| > maximum: return maximum with sign of value.'
     }
 }
 
-to compute_pid index error p_coeff i_coeff d_coeff max_integral {
+to compute_pid index error p_coeff i_coeff d_coeff max_integral max_derivitive {
   comment 'Compute the next PID value value, using inputs:
 * index: index of the PID loop
 * error: error to correct
 * p_coeff: proportional coefficient (corr/error)
 * i_coeff: integral coefficient (corr-msec/error)
 * d_coeff: derivitive coefficient (corr/error-msec)
-* max_integral: maximum absolute value of the integrated error; ignored if 0'
+* max_integral: maximum absolute value of the integrated error; ignored if 0
+* max_derivitive: maximum allowed rate of change of error (per ms); ignored if 0'
   _extend_pid_lists index
   local 'p_value' 0
   local 'i_value' 0
@@ -76,18 +77,30 @@ to compute_pid index error p_coeff i_coeff d_coeff max_integral {
   local 'integral' 0
   local 'curr_time' (microsOp)
   local 'prev_time' (at index _pid__prev_time)
-  p_value = (p_coeff * error)
+  local 'prev_error' (at index _pid__prev_error)
+  local 'raw_error' error
+  local 'delta_time' 0
+  local 'diff_error' 0
+  local 'max_diff_error' 0
   if (prev_time >= 0) {
     comment 'We have old data for this PID loop, so compute derivitive and integral contributions.'
-    local 'delta_time' (elapsed_time prev_time curr_time)
-    local 'diff_error' (error - (at index _pid__prev_error))
-    d_value = (((d_coeff * diff_error) * 1000) / delta_time)
+    delta_time = (elapsed_time prev_time curr_time)
+    diff_error = (error - prev_error)
+    if (max_derivitive > 0) {
+        max_diff_error = ((max_derivitive * delta_time) / 1000)
+        if ((absoluteValue diff_error) > max_diff_error) {
+            diff_error = (apply_sign diff_error max_diff_error)
+            error = (prev_error + diff_error)
+        }
+    }
     integral = (((error * delta_time) / 1000) + (at index _pid__prev_integral))
+    d_value = (((d_coeff * diff_error) * 1000) / delta_time)
     if (and (max_integral > 0) ((absoluteValue max_integral) > max_integral)) {
         integral = (apply_sign integral max_integral)
     }
     i_value = (i_coeff * integral)
   }
+  p_value = (p_coeff * error)
   atPut index _pid__prev_time curr_time
   atPut index _pid__prev_error error
   atPut index _pid__prev_integral integral
