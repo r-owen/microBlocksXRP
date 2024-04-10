@@ -2,7 +2,7 @@ module 'PID'
 author 'Russell Owen'
 version 0 7
 description 'PID Control Loop'
-variables _pid__initialized _pid__prev_error _pid__prev_time _pid__prev_integral 
+variables _pid__initialized _pid__prev_error _pid__prev_usec _pid__prev_integral 
 
   spec ' ' '_extend_pid_lists' '_extend pid lists; index _' 'num' 1
   spec ' ' '_init_pid_library' '_init_pid_library'
@@ -19,7 +19,7 @@ This must be called by every public block.'
   _init_pid_library
   repeatUntil ((size _pid__prev_error) >= index) {
     '[data:addLast]' 0 _pid__prev_error
-    '[data:addLast]' -1 _pid__prev_time
+    '[data:addLast]' -1 _pid__prev_usec
     '[data:addLast]' 0 _pid__prev_integral
   }
 }
@@ -29,7 +29,7 @@ to _init_pid_library {
   but that can be accomplished by calling _extend_pid_lists.'
   if (not _pid__initialized) {
     _pid__prev_error = (newList 0)
-    _pid__prev_time = (newList 0)
+    _pid__prev_usec = (newList 0)
     _pid__prev_integral = (newList 0)
     _pid__initialized = (booleanConstant true)
   }
@@ -74,21 +74,21 @@ to compute_pid index error p_coeff i_coeff d_coeff max_integral {
   local 'i_value' 0
   local 'd_value' 0
   local 'integral' 0
-  local 'curr_time' (microsOp)
-  local 'prev_time' (at index _pid__prev_time)
+  local 'curr_usec' (microsOp)
+  local 'prev_usec' (at index _pid__prev_usec)
   p_value = (p_coeff * error)
-  if (prev_time >= 0) {
+  if (prev_usec >= 0) {
     comment 'We have old data for this PID loop, so compute derivitive and integral contributions.'
-    local 'delta_time' (elapsed_time prev_time curr_time)
+    local 'delta_usec' (elapsed_usec prev_usec curr_usec)
     local 'diff_error' (error - (at index _pid__prev_error))
-    d_value = (((d_coeff * diff_error) * 1000) / delta_time)
-    integral = (((error * delta_time) / 1000) + (at index _pid__prev_integral))
+    d_value = (((d_coeff * diff_error) * 1000) / delta_usec)
+    integral = (((error * delta_usec) / 1000) + (at index _pid__prev_integral))
     if (and (max_integral > 0) ((absoluteValue max_integral) > max_integral)) {
         integral = (apply_sign integral max_integral)
     }
     i_value = (i_coeff * integral)
   }
-  atPut index _pid__prev_time curr_time
+  atPut index _pid__prev_usec curr_usec
   atPut index _pid__prev_error error
   atPut index _pid__prev_integral integral
   return (-1 * (p_value + (i_value + d_value)))
@@ -111,7 +111,7 @@ Call this before starting each move, to avoid unwanted values
 from the integral and derivitive terms.'
   _extend_pid_lists index
   atPut index _pid__prev_error 0
-  atPut index _pid__prev_time -1
+  atPut index _pid__prev_usec -1
   atPut index _pid__prev_integral 0
 }
 
