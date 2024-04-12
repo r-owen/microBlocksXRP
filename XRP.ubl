@@ -1,6 +1,6 @@
 module 'XRP'
 author 'Russell Owen'
-version 0 2
+version 0 1
 description 'Drive the WPI XRP robot'
 depends DCMotors Servo 'Distance (HC-SR04)'
 variables none_yet

@@ -1,6 +1,6 @@
 module 'PID'
 author 'Russell Owen'
-version 0 8
+version 0 1
 description 'PID Control Loop'
 variables _pid__initialized _pid__prev_error _pid__prev_usec _pid__prev_integral 
 
