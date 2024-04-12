@@ -1,6 +1,6 @@
 module 'PID'
 author 'Russell Owen'
-version 0 7
+version 0 8
 description 'PID Control Loop'
 variables _pid__initialized _pid__prev_error _pid__prev_usec _pid__prev_integral 
 
@@ -8,7 +8,7 @@ variables _pid__initialized _pid__prev_error _pid__prev_usec _pid__prev_integral
   spec ' ' '_init_pid_library' '_init_pid_library'
   spec 'r' 'apply_sign' 'apply sign _ to value _' 'num num' 1 0
   spec 'r' 'constrain_value' 'constrain value _ deadband _ minimum _ maximum _' 'num num num num' 0 0 0 1000
-  spec 'r' 'elapsed_time' 'elapsed_time start_time _ end_time _' 'num num' 0 0
+  spec 'r' 'elapsed_time' 'elapsed_time from _ to _' 'num num' 0 0
   spec 'r' 'compute_pid' 'compute pid at index _ error _ p coeff _ i coeff _ d coeff _ max integral _ (ignored if 0)' 'num num num num num num' 1 0 1 0 0 0
   spec ' ' 'reset_pid' 'reset pid at index _' 'num' 1
 
@@ -79,7 +79,7 @@ to compute_pid index error p_coeff i_coeff d_coeff max_integral {
   p_value = (p_coeff * error)
   if (prev_usec >= 0) {
     comment 'We have old data for this PID loop, so compute derivitive and integral contributions.'
-    local 'delta_usec' (elapsed_usec prev_usec curr_usec)
+    local 'delta_usec' (elapsed_time prev_usec curr_usec)
     local 'diff_error' (error - (at index _pid__prev_error))
     d_value = (((d_coeff * diff_error) * 1000) / delta_usec)
     integral = (((error * delta_usec) / 1000) + (at index _pid__prev_integral))
@@ -94,11 +94,14 @@ to compute_pid index error p_coeff i_coeff d_coeff max_integral {
   return (-1 * (p_value + (i_value + d_value)))
 }
 
-to elapsed_time start_time end_time {
-  comment 'Safely compute an elapsed time from two microsecond or millisecond clock values,  
-taking into account the fact that the clocks wrap from 1073741823 to 0.
-Warning: requires prerelease firmware for milliseconds; the millisecond clock in release firmware wraps at a smaller value.'
-  local 'delta_time' (end_time - start_time)
+to elapsed_time from_time to_time {
+  comment 'Compute an elapsed time between two microsecond clock values.
+Unlike simple subtraction, this accounts for clock wrap (from 1073741823 to 0).
+Notes as of 2024-04-01:
+* May also be used for millisecond clock values in prerelease firmware, but not release firmware
+  (because in release firmware the millisecond clock wraps at a smaller value).
+* The next release should include built-in blocks that perform this same computation.'
+  local 'delta_time' (to_time - from_time)
   if (delta_time < 0) {
     delta_time += -1073741824
   }
