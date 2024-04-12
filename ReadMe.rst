@@ -25,7 +25,7 @@ The main blocks are:
   * ``pCoeff``: proportional coefficient (corr/error)
   * ``iCoeff``: integral coefficient (corr=msec/error)
   * ``dCoeff``: derivitive coefficient (corr/error=msec)
-  * ``max_integral``: maximum absolute value of the integrated error; ignored if 0``
+  * ``maxIntegral``: maximum absolute value of the integrated error; ignored if 0``
   
 * ``pid_resetPID``: reset the specified PID loop.
   It may be useful to reset a PID before commanding a new move.
@@ -53,7 +53,7 @@ Recommendations for using ``pid_computePID``:
   To make the system more stable you can try either or both of the following:
   
   * Use a non-zero ``dCoeff`` (this is very common when specifying a non-zero ``iCoeff``).
-  * Specify a non-zero value for ``max_integral``.
+  * Specify a non-zero value for ``maxIntegral``.
 
 * If you can predict the value of the drive signal, definitely try using a "feedforward" signal.
   This should reduce the size of the PID corrections, which may make your system more responsive and stable.
@@ -101,3 +101,10 @@ XRP
 
 Control the WPI XRP robot.
 The non-wheel-related code was originally written by Steve Spaeth.
+
+Some useful XRP facts from  https://docs.wpilib.org/en/stable/docs/xrp-robot/getting-to-know-xrp.html:
+
+• The wheels have a diameter of 60 mm (2.36”) and are separated by 155mm (6.10”).
+• There are 585 encoder counts per revolution of the wheel (12 counts per revolution of the motor, which is then geared down).
+• Distance of traveled for one revolution of the wheels: 188 mm (7.42").
+• Distance traveled for one encoder tick: 0.322 mm (0.0127")
