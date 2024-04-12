@@ -7,6 +7,7 @@ Contains the following microBlocks libraries:
 
 * ``PID.ubl``: PID (proportional, integral, derivitive) controllers.
 * ``DC Motors.ubl``: control DC motors that have incremental encoders.
+* ``XRP.ubl``: control the WPI XRP robot kit.
 
 PID.ubl
 =======
@@ -65,28 +66,18 @@ The board-specific library must define the following blocks (which take no argum
 
 See ``XRP.ubl`` for an example.
 
-The main DCMotors blocks fall into several categories:
+The main DCMotors blocks:
 
-Background tasks.
-These must be running in order to use most other blocks.
-They are infinite loops, so you must not put any blocks after them.
-
-* ``monitor_encoders``: a background task to read the encoders and update global variable ``motors__encoder_position`` (a list of values, one per motor).
-* ``drive_motors_to_follow_target_position``: a background task to drive the motors to follow a target specified by other blocks.
-
-Blocks that only work if the background tasks are running:
-
-* ``move_motor_by_amount``: move the specified motor by the specified number of encoder counts.
-* ``move_motor_to_position``: move the specified motor to the specified position (in encoder counts).
-* ``set_motor_speed``: move the specified motor at constant speed (in encoder counts/second), starting at the current measured position.
-* ``_set_motor_target``: an advanced block that allows you to set the target position (encoder counts), speed (encoder counts/second), and starting time (milliseconds, -1 for "now").
-  The blocks above it all call this method.
-  This is an advanced block because it is hard to use correctly (easy to be surprised by what it does).
-
-Blocks which work even if the background tasks are not running:
-
+* ``move_motor_distance_speed``: move the specified motor by the specified number of encoder counts.
 * ``stop_all_motors``: stop all motors.
 * ``stop_motor``: stop the specified motor.
+
+Background tasks which the user should not have to touch.
+Note that each of this is an infinite loops, so if you do decide to run them manually,
+any code you put after either of them will never run:
+
+* ``monitor_encoders``: read the encoders and update global variable ``motors__encoder_position`` (a list of values, one per motor).
+* ``drive_motors_to_follow_target``: drive the motors to follow a target specified by other blocks.
 
 XRP
 ===
