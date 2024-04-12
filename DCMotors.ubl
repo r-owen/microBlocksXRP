@@ -1,23 +1,21 @@
 module 'DCMotors'
 author 'Russell Owen'
-version 0 10
+version 0 11
 description 'Drive DC motors with encoders'
 depends PID
-variables motors__encoder_position _dcmotors__initialized _dcmotors__num_motors _dcmotors__max_speed _dcmotors__pin_duty_cycle _dcmotors__pin_encoder_a _dcmotors__pin_encoder_b _dcmotors__pin_direction _dcmotors__prev_encoder_a_state _dcmotors__prev_encoder_b_state _dcmotors__target_time _dcmotors__target_position _dcmotors__target_speed _dcmotors__p_coeff _dcmotors__i_coeff _dcmotors__d_coeff _dcmotors__deadband _dcmotors__min_effort _dcmotors__max_effort _dcmotors__max_integral
+variables motors__encoder_position _dcmotors__initialized _dcmotors__num_motors _dcmotors__max_speed _dcmotors__pin_duty_cycle _dcmotors__pin_encoder_a _dcmotors__pin_encoder_b _dcmotors__pin_direction _dcmotors__prev_encoder_a_state _dcmotors__prev_encoder_b_state _dcmotors__target_start_position _dcmotors__target_speed _dcmotors__target_start_msec _dcmotors__target_duration_msec _dcmotors__p_coeff _dcmotors__i_coeff _dcmotors__d_coeff _dcmotors__deadband _dcmotors__min_effort _dcmotors__max_effort _dcmotors__max_integral
 
   spec ' ' '_init_dcmotors_library' '_init_dcmotors_library'
   spec ' ' '_init_dcmotors_variables' '_init_dcmotors_variables'
   spec ' ' 'monitor_encoders' 'monitor motor encoders'
-  spec ' ' 'drive_motors_to_follow_target_position' 'drive motors to follow target position'
+  spec ' ' 'drive_motors_to_follow_target' 'drive motors to follow target'
   spec ' ' 'reset_motor_encoder' 'reset motor encoder index _' 'num' 1
-  spec ' ' 'move_at_effort' 'move motor _ with effort _ (-1023 to 1023)' 'num num' 1 250
-  spec ' ' 'move_motor_by_amount' 'move motor _ by amount _ (encoder counts)' 'num num' 1 585
-  spec ' ' 'move_motor_to_position' 'move motor _ to position _ (encoder counts)' 'num num' 1 585
-  spec ' ' 'set_motor_speed' 'set motor _ speed _ (encoder counts/sec)' 'num num' 1 0
-  spec ' ' '_set_motor_target' 'set motor _ target position _  (encoder counts) speed _  (encoder counts/sec) time _ (milliseconds, now if <0)' 'num num num num' 1 0 0 -1
+  spec ' ' 'move_motor_with_effort' 'move motor _ with effort _ (-1023 to 1023)' 'num num' 1 250
+  spec ' ' 'move_motor_distance_speed' 'move motor _ distance _ (encoder counts) at speed _ (counts/sec)' 'num num num' 1 585 1000
   spec ' ' 'stop_all_motors' 'stop all motors'
   spec ' ' 'stop_motor' 'stop motor _' 'num' 1
-  spec ' ' '_basic_move_at_effort' '_basic_move_at_effort index _ effort _ (-1023 to 1023)' 'num num' 1 250
+  spec 'r' '_get_target_position_and_speed' 'get target position and speed for motor _ at time _ (msec, -1 for now)' 'num num' 1 -1
+  spec ' ' '_basic_move_motor_with_effort' '_basic_move_motor_with_effort index _ effort _ (-1023 to 1023)' 'num num' 1 250
 
 to _init_dcmotors_library {
   comment 'Initialize the DC Motors library.
@@ -34,15 +32,18 @@ Defaults to an XRP robot kit with 2 motors; change this code for other systems'
         _dcmotors__initialized = (booleanConstant true)
     }
     _dcmotors_check_system
+    sendBroadcast 'monitor_encoders'
+    sendBroadcast 'drive_motors_to_follow_target'
 }
 
 to _init_dcmotors_variables {
     comment 'Initialize variables whose values do not depend on the type of system,
 and create all lists (but do not set values) of variables that are system-specific.'
     motors__encoder_position = (newList _dcmotors__num_motors 0)
-    _dcmotors__target_time = (newList _dcmotors__num_motors -1)
-    _dcmotors__target_position = (newList _dcmotors__num_motors 0)
+    _dcmotors__target_start_position = (newList _dcmotors__num_motors 0)
     _dcmotors__target_speed = (newList _dcmotors__num_motors 0)
+    _dcmotors__target_start_msec = (newList _dcmotors__num_motors -1)
+    _dcmotors__target_duration_msec = (newList _dcmotors__num_motors 0)
     _dcmotors__prev_encoder_a_state = (newList _dcmotors__num_motors (booleanConstant false))
     _dcmotors__prev_encoder_b_state = (newList _dcmotors__num_motors (booleanConstant false))
     comment 'The following lists are system specific, so their elements must be set elsewhere.'
@@ -54,12 +55,13 @@ and create all lists (but do not set values) of variables that are system-specif
 
 to monitor_encoders {
     comment 'Monitor the motor encoders.
-    This must be called once to start monitoring, at which point it keeps running
-    until the system is stopped.
+    This is a background tasks (and an infinite loop) which must be running in order for the remaining code
+    to know where the wheels are.
     The encoders are assumed to be quadrature incremental encoders.
     Here is an explanation for how this code works:
     https://howtomechatronics.com/tutorials/arduino/rotary-encoder-works-use-arduino/'
     _init_dcmotors_library
+    sayIt 'monitor_encoders is running'
     local 'encoder_a_state' (booleanConstant false)
     local 'encoder_b_state' (booleanConstant false)
     local 'prev_encoder_a_state' (booleanConstant false)
@@ -89,27 +91,28 @@ to monitor_encoders {
     }
 }
 
-to drive_motors_to_follow_target_position {
+to drive_motors_to_follow_target {
+    comment 'Drive motors to follow the specified target position and speed.
+This is a background task (infinite loop) that must be running in order for move_motor_distance_speed to work.'
+    sayIt 'drive_motors_to_follow_target running'
     for i _dcmotors__num_motors {
         reset_pid i
     }
     _init_dcmotors_library
-    local 'target_time' -1
+    local 'target_position_and_speed' 0
+    local 'target_position' 0
     local 'target_speed' 0
     local 'encoder_position' 0
     local 'position_error' 0
     local 'correction' 0
     local 'effort' 0
     local 'raw_effort' 0
-    local 'delta_time' 0
-    local 'delta_position' 0
     forever {
         for i _dcmotors__num_motors {
-            target_time = (at i _dcmotors__target_time)
-            if (target_time >= 0) {
-                delta_time = (elapsed_time target_time (millisOp))
-                delta_position = ((delta_time * (at i _dcmotors__target_speed)) / 1000)
-                target_position = ((at i _dcmotors__target_position) + delta_position)
+            if ((at i _dcmotors__target_start_msec) >= 0) {
+                target_position_and_speed = (_get_target_position_and_speed i -1)
+                target_position = (at 1 target_position_and_speed)
+                target_speed = (at 2 target_position_and_speed)
                 encoder_position = (at i motors__encoder_position)
                 comment 'Note: simple subtraction handles encoder wraparound automatically'
                 position_error = (encoder_position - target_position)
@@ -119,8 +122,8 @@ to drive_motors_to_follow_target_position {
                 effort = (constrain_value effort _dcmotors__deadband _dcmotors__min_effort _dcmotors__max_effort)
                 printIt target_position position_error effort raw_effort
                 comment 'Check that following is still wanted, just before commanding the motor.'
-                if ((at i _dcmotors__target_time) >= 0) {
-                    _basic_move_at_effort i effort
+                if ((at i _dcmotors__target_start_msec) >= 0) {
+                    _basic_move_motor_with_effort i effort
                 }
             }
         }
@@ -132,42 +135,27 @@ to reset_motor_encoder index {
     atPut index motors__encoder_position 0
 }
 
-to move_at_effort index effort {
+to move_motor_with_effort index effort {
     _init_dcmotors_library
-    _basic_move_at_effort index effort
+    _basic_move_motor_with_effort index effort
 }
 
-to move_motor_by_amount index amount {
-    comment 'Move the specified motor by the specified amount (in encoder counts).'
-    _init_dcmotors_library
-    _set_motor_target index ((at index motors__encoder_position) + amount) 0 -1
-}
-
-to move_motor_to_position index position {
-  comment 'Move the specified motor to the specified position (in encoder counts).
-This simply sets the motor target position and enables following (if not already enabled);
-for the motor to actually move, the drive_motors_to_follow_target_position block must be running.'
-    _init_dcmotors_library
-    _set_motor_target index position 0 -1
-}
-
-to set_motor_speed index speed {
-    comment 'Move the specified motor at the specified speed'
-    _init_dcmotors_library
-    _set_motor_target index (at index motors__encoder_position) speed -1
-}
-
-to _set_motor_target index position speed time {
-    _init_dcmotors_library
-    if (time < 0) {
-        time = (millisOp)
+to move_motor_distance_speed index distance speed {
+    comment 'Move the specified motor by the specified amount (encoder counts) at the specified speed (counts/sec).'
+    if (speed == 0) {
+        sayIt 'Speed must be nonzero'
+        return
     }
-    comment 'Always start by setting time < 0, then speed = 0, to make race conflicts less problematic'
-    atPut index _dcmotors__target_time -1
-    atPut index _dcmotors__target_speed 0
-    atPut index _dcmotors__target_position position
+    _init_dcmotors_library
+    local 'duration_msec' (((absoluteValue distance) * 1000) / speed)
+    sayIt 'move duration=' duration_msec
+    comment 'Always start by setting time <0, set all other parameters, then set the real time.
+This avoids race conditions.'
+    atPut index _dcmotors__target_start_msec -1
+    atPut index _dcmotors__target_start_position (at index motors__encoder_position)
     atPut index _dcmotors__target_speed speed
-    atPut index _dcmotors__target_time time
+    atPut index _dcmotors__target_duration_msec duration_msec
+    atPut index _dcmotors__target_start_msec (millisOp)
 }
 
 to stop_all_motors {
@@ -178,13 +166,41 @@ to stop_all_motors {
 
 to stop_motor index {
     _init_dcmotors_library
-    atPut index _dcmotors__target_time -1
+    atPut index _dcmotors__target_start_msec -1
     atPut index _dcmotors__target_speed 0
     analogWriteOp (at index _dcmotors__pin_duty_cycle) 0
 }
 
-to _basic_move_at_effort index effort {
-    comment 'Implement move_at_effort, assuming _init_dcmotors_library has been called'
+to _get_target_position_and_speed index at_msec {
+    comment 'Compute the target position for the specified motor at the specified time (ms, <0 for now).
+Return a list with two elements:
+* target position (encoder counts)
+* target speed (encoder counts/second).
+Assumes that _init_dcmotors_library has been called'
+    if (at_msec < 0) {
+        at_msec = (millisOp)
+    }
+    local 'target_start_msec' (at index _dcmotors__target_start_msec)
+    if (target_start_msec < 0) {
+        sayIt 'warning: no target; returning 0, 0'
+        return ('[data:makeList]' 0 0)
+    }
+    local 'duration_msec' (elapsed_time target_start_msec at_msec)
+    local 'target_duration_msec' (at index _dcmotors__target_duration_msec)
+    local 'target_speed' 0
+    if (duration_msec > target_duration_msec) {
+        comment 'Move is done; target position = end position'
+        duration_msec = target_duration_msec
+        target_speed = 0
+    } else {
+        target_speed = (at index _dcmotors__target_speed)
+    }
+    local 'target_position' ((at index _dcmotors__target_start_position) + ((duration_msec * (at index _dcmotors__target_speed)) / 1000))
+    return  ('[data:makeList]' target_position target_speed)
+}
+
+to _basic_move_motor_with_effort index effort {
+    comment 'Implement move_motor_with_effort. Assumes that _init_dcmotors_library has been called'
     analogWriteOp (at index _dcmotors__pin_duty_cycle) (absoluteValue effort)
     digitalWriteOp (at index _dcmotors__pin_direction) (effort > 0)
 }
