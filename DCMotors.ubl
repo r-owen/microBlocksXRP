@@ -61,7 +61,6 @@ to monitor_encoders {
     Here is an explanation for how this code works:
     https://howtomechatronics.com/tutorials/arduino/rotary-encoder-works-use-arduino/'
     _init_dcmotors_library
-    sayIt 'monitor_encoders is running'
     local 'encoder_a_state' (booleanConstant false)
     local 'encoder_b_state' (booleanConstant false)
     local 'prev_encoder_a_state' (booleanConstant false)
@@ -94,7 +93,6 @@ to monitor_encoders {
 to drive_motors_to_follow_target {
     comment 'Drive motors to follow the specified target position and speed.
 This is a background task (infinite loop) that must be running in order for move_motor_distance_speed to work.'
-    sayIt 'drive_motors_to_follow_target running'
     for i _dcmotors__num_motors {
         reset_pid i
     }
@@ -120,7 +118,7 @@ This is a background task (infinite loop) that must be running in order for move
                 effort = (correction / 1000)
                 raw_effort = effort
                 effort = (constrain_value effort _dcmotors__deadband _dcmotors__min_effort _dcmotors__max_effort)
-                printIt target_position position_error effort raw_effort
+                printIt position_error effort raw_effort
                 comment 'Check that following is still wanted, just before commanding the motor.'
                 if ((at i _dcmotors__target_start_msec) >= 0) {
                     _basic_move_motor_with_effort i effort
@@ -136,24 +134,33 @@ to reset_motor_encoder index {
 }
 
 to move_motor_with_effort index effort {
+    comment 'Move the specified motor at the specified "effort", a value between -1023 and 1023.
+Effort is the duty cycle of the drive signal to the motor (plus a sign signal),
+and is roughly proportional to speed, at least if the motor has no load.
+Warning:  geared motors have enough friction that they may not reliably move at low speeds.
+For example the XRP wheels may not reliably move if the absolute value of effort is less than about 200.
+This the usable range is rather small.'
     _init_dcmotors_library
     _basic_move_motor_with_effort index effort
 }
 
 to move_motor_distance_speed index distance speed {
-    comment 'Move the specified motor by the specified amount (encoder counts) at the specified speed (counts/sec).'
+    comment 'Move the specified motor by the specified amount (encoder counts) at the specified speed (counts/sec).
+To move backwards, specify a negative distance.
+Negating speed has no effect (this block always uses the absolute value of speed).
+Warning: speed must not be 0.'
     if (speed == 0) {
-        sayIt 'Speed must be nonzero'
+        sayIt 'Error: speed must be nonzero'
         return
     }
     _init_dcmotors_library
     local 'duration_msec' (((absoluteValue distance) * 1000) / speed)
-    sayIt 'move duration=' duration_msec
     comment 'Always start by setting time <0, set all other parameters, then set the real time.
 This avoids race conditions.'
+    speed = (absoluteValue speed)
     atPut index _dcmotors__target_start_msec -1
     atPut index _dcmotors__target_start_position (at index motors__encoder_position)
-    atPut index _dcmotors__target_speed speed
+    atPut index _dcmotors__target_speed (apply_sign distance speed)
     atPut index _dcmotors__target_duration_msec duration_msec
     atPut index _dcmotors__target_start_msec (millisOp)
 }
@@ -172,17 +179,17 @@ to stop_motor index {
 }
 
 to _get_target_position_and_speed index at_msec {
-    comment 'Compute the target position for the specified motor at the specified time (ms, <0 for now).
+    comment 'Compute the target position for the specified motor at the specified time (msec, <0 for now).
 Return a list with two elements:
 * target position (encoder counts)
 * target speed (encoder counts/second).
-Assumes that _init_dcmotors_library has been called'
+Assumes that _init_dcmotors_library has been called.'
     if (at_msec < 0) {
         at_msec = (millisOp)
     }
     local 'target_start_msec' (at index _dcmotors__target_start_msec)
     if (target_start_msec < 0) {
-        sayIt 'warning: no target; returning 0, 0'
+        sayIt 'Warning: no target; returning 0, 0'
         return ('[data:makeList]' 0 0)
     }
     local 'duration_msec' (elapsed_time target_start_msec at_msec)
