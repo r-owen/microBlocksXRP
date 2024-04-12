@@ -17,21 +17,21 @@ Each controller is specified by a different index: 1, 2, 3...
 
 The main blocks are:
 
-* ``compute_pid``: compute the next PID correction for the specified PID loop.
+* ``pid_computePID``: compute the next PID correction for the specified PID loop.
   The inputs are as follows:
 
   * ``index``: index of the PID loop: 1, 2, 3...
   * ``error``: error to correct
-  * ``p_coeff``: proportional coefficient (corr/error)
-  * ``i_coeff``: integral coefficient (corr=msec/error)
-  * ``d_coeff``: derivitive coefficient (corr/error=msec)
+  * ``pCoeff``: proportional coefficient (corr/error)
+  * ``iCoeff``: integral coefficient (corr=msec/error)
+  * ``dCoeff``: derivitive coefficient (corr/error=msec)
   * ``max_integral``: maximum absolute value of the integrated error; ignored if 0``
   
-* ``reset_pid``: reset the specified PID loop.
+* ``pid_resetPID``: reset the specified PID loop.
   It may be useful to reset a PID before commanding a new move.
 
-* ``constrain_value``: limit the range of a value, intended to post-process a scaled correction from a PID loop.
-  This may be used to constrain the correction returned by ``compute_pid`` to useful values.
+* ``pid_constrainValue``: limit the range of a value, intended to post-process a scaled correction from a PID loop.
+  This may be used to constrain the correction returned by ``pid_computePID`` to useful values.
   The algorithm is as follows (where ``|value|`` means the absolute value of ``value``):
 
   * If ``|value| < deadband``: return 0.
@@ -43,16 +43,16 @@ The main blocks are:
     This prevents applying more correction than the system can handle.
     For example the WPI XRP motor drives have a maximum "effort" of 1023.
 
-Recommendations for using ``compute_pid``:
+Recommendations for using ``pid_computePID``:
 
-* In order to allow tuning flexibility, use a ``p_coeff`` significantly larger than 1 (e.g. 100 or 1000).
+* In order to allow tuning flexibility, use a ``pCoeff`` significantly larger than 1 (e.g. 100 or 1000).
   Then divide the resulting correction by a suitable factor to get your drive signal.
   This helps compensate for the lack of floating=point values in microBlocks.
-* Limit the resulting drive signal to reasonable values using ``constrain_value``.
-* Using a non-zero ``i_coeff`` can easily lead to oscillations or instability.
+* Limit the resulting drive signal to reasonable values using ``pid_constrainValue``.
+* Using a non-zero ``iCoeff`` can easily lead to oscillations or instability.
   To make the system more stable you can try either or both of the following:
   
-  * Use a non-zero ``d_coeff`` (this is very common when specifying a non-zero ``i_coeff``).
+  * Use a non-zero ``dCoeff`` (this is very common when specifying a non-zero ``iCoeff``).
   * Specify a non-zero value for ``max_integral``.
 
 * If you can predict the value of the drive signal, definitely try using a "feedforward" signal.
@@ -65,11 +65,11 @@ Recommendations for using ``compute_pid``:
     consider setting this predicted signal to 0 if it is too small to be useful.
   * Compute the PID correction.
   * Divide the correction by the usual factor (as discussed in the first item in this list), and add it to the predicted drive signal.
-  * Limit the resulting drive signal to a reasonable value using ``constrain_value``, as usual.
+  * Limit the resulting drive signal to a reasonable value using ``pid_constrainValue``, as usual.
   * TO test the effect, you can easily disable feedfoward by forcing the predicted drive signal to 0.
 
-DCMotors.ubl
-============
+Encoded DC Motors.ubl
+=====================
 
 Control DC motors that have incremental encoders.
 Each motor is specified by a different index: 1, 2, 3...
@@ -78,23 +78,23 @@ This library requires the ``PID.ubl`` library.
 This library must be configured by a board-specific library in order to control that board.
 The board-specific library must define the following blocks (which take no arguments):
 
-* ``get_num_motors``: return the number of DC motors supported by your system.
-* ``_init_dcmotors_system_variables``: initialize system-specific DCMotors variables.
+* ``edcmotors_getNumMotors``: return the number of DC motors supported by your system.
+* ``_edcmotors_initSystemVariables``: initialize system-specific 'Encoded DC Motors' variables.
 
 See ``XRP.ubl`` for an example.
 
-The main DCMotors blocks:
+The main 'Encoded DC Motors' blocks:
 
-* ``move_motor_distance_speed``: move the specified motor by the specified number of encoder counts.
-* ``stop_all_motors``: stop all motors.
-* ``stop_motor``: stop the specified motor.
+* ``edcmotors_moveMotorDistanceSpeed``: move the specified motor by the specified number of encoder counts.
+* ``edcmotors_stopAllMotors``: stop all motors.
+* ``edcmotors_stopMotor``: stop the specified motor.
 
 Background tasks which the user should not have to touch.
 Note that each of this is an infinite loops, so if you do decide to run them manually,
 any code you put after either of them will never run:
 
-* ``monitor_encoders``: read the encoders and update global variable ``motors__encoder_position`` (a list of values, one per motor).
-* ``drive_motors_to_follow_target``: drive the motors to follow a target specified by other blocks.
+* ``_edcmotors_monitorEncoders``: read the encoders and update global variable ``edcmotors__encoderPosition`` (a list of values, one per motor).
+* ``_edcmotors_driveMotorsToFollowTarget``: drive the motors to follow a target specified by other blocks.
 
 XRP
 ===

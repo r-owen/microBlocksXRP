@@ -1,90 +1,94 @@
 module 'XRP'
 author 'Russell Owen'
-version 0 1
+version 0 2
 description 'Drive the WPI XRP robot'
-depends DCMotors Servo 'Distance (HC-SR04)'
+depends 'Encoded DC Motors' Servo 'Distance (HC-SR04)'
 variables none_yet
 
-  spec ' ' '_dcmotors_check_system' '_dcmotors_check_system'
-  spec ' ' '_init_dcmotors_system_variables' '_init_dcmotors_system_variables'
-  spec ' ' 'drive_distance' 'drive distance _ (encoder counts) speed _ (counts/sec)' 'num num' 100 400
-  spec 'r' 'get_num_motors' '_get_num_motors'
-  spec 'r' 'read_user_button' 'read user button'
-  spec 'r' 'read_distance_sensor' 'read distance sensor (cm)'
-  spec 'r' 'read_line_sensors' 'read line sensors L,R (raw)'
-  spec ' ' 'set_servo' 'set servo _ to angle _ (degrees)' 'num num' 1 0
-  spec ' ' 'turn_angle' 'turn angle _ (degrees) at motor speed _ (encoder counts/sec)' 'num num' 90 400
+  spec ' ' '_edcmotors_checkSystem' '_edcmotors_checkSystem'
+  spec ' ' '_edcmotors_initSystemVariables' '_edcmotors_initSystemVariables'
+  spec 'r' 'edcmotors_getNumMotors' 'get the number of encoded DC motors'
+  spec ' ' 'xrp_driveDistance' 'drive distance _ (encoder counts) speed _ (counts/sec)' 'num num' 100 400
+  spec 'r' 'xrp_readUserButton' 'read user button'
+  spec 'r' 'xrp_readDistanceSensor' 'read distance sensor (cm)'
+  spec 'r' 'xrp_readLineSensors' 'read line sensors L,R (raw)'
+  spec ' ' 'xrp_setServo' 'set servo _ to angle _ (degrees)' 'num num' 1 0
+  spec ' ' 'xrp_turnAngle' 'turn angle _ (degrees) at motor speed _ (encoder counts/sec)' 'num num' 90 400
 
-to '_dcmotors_check_system' {
-    comment 'Check the XRP board's drive power'
-    repeatUntil ((analogReadOp 28) >= 300) {
-        sayIt 'Insufficient drive voltage; check the power switch and batteries.'
-    }
-    sayIt ''
+to '_edcmotors_checkSystem' {
+  comment 'Check the XRP board's drive power.'
+  repeatUntil ((analogReadOp 28) >= 300) {
+    sayIt 'Insufficient drive voltage; check the power switch and batteries.'
+  }
+  sayIt ''
 }
 
-to '_init_dcmotors_system_variables' {
-    comment 'Set system-specific motors variables.
-Assume that _init_dcmotors_variables has been called, so that all lists exist.'
-    if ((_dcmotors__num_motors < 2) or (_dcmotors__num_motors > 4)) {
-        sayIt 'Number of motors must be 2-4'
-        return
-    }
-    _dcmotors__p_coeff = 2000
-    _dcmotors__i_coeff = 0
-    _dcmotors__d_coeff = 0
-    _dcmotors__deadband = 10
-    _dcmotors__min_effort = 300
-    _dcmotors__max_effort = 1023
-    _dcmotors__max_integral = 10
-    comment 'Approximate maximum motor speed (encoder counts/second) with no load'
-    _dcmotors__max_speed = 1080
-    atPut 1 _dcmotors__pin_encoder_a 4
-    atPut 1 _dcmotors__pin_encoder_b 5
-    atPut 1 _dcmotors__pin_direction 6
-    atPut 1 _dcmotors__pin_duty_cycle 7
-    atPut 2 _dcmotors__pin_encoder_a 12
-    atPut 2 _dcmotors__pin_encoder_b 13
-    atPut 2 _dcmotors__pin_direction 14
-    atPut 2 _dcmotors__pin_duty_cycle 15
-    if (_dcmotors__num_motors > 2) {
-        atPut 3 _dcmotors__pin_encoder_a 0
-        atPut 3 _dcmotors__pin_encoder_b 1
-        atPut 3 _dcmotors__pin_direction 2
-        atPut 3 _dcmotors__pin_duty_cycle 3
-    }
-    if (_dcmotors__num_motors > 3) {
-        atPut 4 _dcmotors__pin_encoder_a 8
-        atPut 4 _dcmotors__pin_encoder_b 9
-        atPut 4 _dcmotors__pin_direction 10
-        atPut 4 _dcmotors__pin_duty_cycle 11
-    }
+to '_edcmotors_initSystemVariables' {
+  comment 'Set system-specific motors variables.
+    Assume that _init_edcmotors_variables has been called, so that all lists exist.'
+  if ((_edcmotors__numMotors < 2) or (_edcmotors__numMotors > 4)) {
+    sayIt 'Number of motors must be 2-4'
+    return
+  }
+  _edcmotors__pCoeff = 2000
+  _edcmotors__iCoeff = 0
+  _edcmotors__dCoeff = 0
+  _edcmotors__deadband = 10
+  _edcmotors__minEffort = 300
+  _edcmotors__maxEffort = 1023
+  _edcmotors__maxIntegral = 10
+  comment 'Approximate maximum motor speed (encoder counts/second) with no load'
+  _edcmotors__maxSpeed = 1080
+  atPut 1 _edcmotors__pinEncoderA 4
+  atPut 1 _edcmotors__pinEncoderB 5
+  atPut 1 _edcmotors__pinDirection 6
+  atPut 1 _edcmotors__pinDutyCycle 7
+  atPut 2 _edcmotors__pinEncoderA 12
+  atPut 2 _edcmotors__pinEncoderB 13
+  atPut 2 _edcmotors__pinDirection 14
+  atPut 2 _edcmotors__pinDutyCycle 15
+  if (_edcmotors__numMotors > 2) {
+    atPut 3 _edcmotors__pinEncoderA 0
+    atPut 3 _edcmotors__pinEncoderB 1
+    atPut 3 _edcmotors__pinDirection 2
+    atPut 3 _edcmotors__pinDutyCycle 3
+  }
+  if (_edcmotors__numMotors > 3) {
+    atPut 4 _edcmotors__pinEncoderA 8
+    atPut 4 _edcmotors__pinEncoderB 9
+    atPut 4 _edcmotors__pinDirection 10
+    atPut 4 _edcmotors__pinDutyCycle 11
+  }
 }
 
-to drive_distance distance speed {
-    move_motor_distance_speed 1 distance speed
-    move_motor_distance_speed 2 (-1 * distance) speed
+to 'edcmotors_getNumMotors' {
+  comment 'Get the number of motors. The standard XRP kit comes with 2 motors that drive wheels,
+    but the board can drive up to 4 motors. If you are using more than 2 motors,
+    override this method to return how many you are using. Never return less than 2.'
+  return 2
 }
 
-to 'get_num_motors' {
-    return 2
+to xrp_driveDistance distance speed {
+  comment 'Drive the wheels the specified distance (encoder counts) at the specified speed (counts/second)'
+  edcmotors_moveMotorDistanceSpeed 1 distance speed
+  edcmotors_moveMotorDistanceSpeed 2 (-1 * distance) speed
 }
 
-to 'read_distance_sensor' {
+to 'xrp_readDistanceSensor' {
   comment 'Return the distance (cm) read by the HC-SR04 distance sensor.'
   return ('distance (cm)' 20 21)
 }
 
-to read_line_sensors {
+to xrp_readLineSensors {
   return ('[data:makeList]' (analogReadOp 26) (analogReadOp 27))
 }
 
-to read_user_button {
+to xrp_readUserButton {
   return (not (digitalReadOp 22))
 }
 
-to set_servo index angle {
-  _dcmotors_check_system
+to xrp_setServo index angle {
+  _edcmotors_checkSystem
   if (index == 1) {
     setServoAngle 16 angle
   } (index == 2) {
@@ -94,8 +98,10 @@ to set_servo index angle {
   }
 }
 
-to turn_angle angle speed {
-    sayIt 'turn_angle' angle speed
-    move_motor_distance_speed 1 ((41978 * angle) / 10000) speed
-    move_motor_distance_speed 2 ((41978 * angle) / 10000) speed
+to xrp_turnAngle angle speed {
+  comment 'Turn the robot by the specified angle (degrees),
+    moving the wheel at the specified speed (encoder counts/second).
+    Rotate about a point halfway between the wheels.'
+  edcmotors_moveMotorDistanceSpeed 1 ((41978 * angle) / 10000) speed
+  edcmotors_moveMotorDistanceSpeed 2 ((41978 * angle) / 10000) speed
 }

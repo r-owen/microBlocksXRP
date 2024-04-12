@@ -1,120 +1,124 @@
 module 'PID'
 author 'Russell Owen'
-version 0 1
+version 0 2
 description 'PID Control Loop'
-variables _pid__initialized _pid__prev_error _pid__prev_usec _pid__prev_integral 
+variables _pid__initialized _pid__numPIDs _pid__prevError _pid__prevMicros _pid__prevIntegral 
 
-  spec ' ' '_extend_pid_lists' '_extend pid lists; index _' 'num' 1
-  spec ' ' '_init_pid_library' '_init_pid_library'
-  spec 'r' 'apply_sign' 'apply sign _ to value _' 'num num' 1 0
-  spec 'r' 'constrain_value' 'constrain value _ deadband _ minimum _ maximum _' 'num num num num' 0 0 0 1000
-  spec 'r' 'elapsed_time' 'elapsed_time from _ to _' 'num num' 0 0
-  spec 'r' 'compute_pid' 'compute pid at index _ error _ p coeff _ i coeff _ d coeff _ max integral _ (ignored if 0)' 'num num num num num num' 1 0 1 0 0 0
-  spec ' ' 'reset_pid' 'reset pid at index _' 'num' 1
+  spec ' ' '_pid_extendPIDLists' '_extend pid lists; index _' 'num' 1
+  spec ' ' '_pid_initLibrary' '_init pid library'
+  spec 'r' 'pid_applySign' 'apply sign _ to value _' 'num num' 1 0
+  spec 'r' 'pid_constrainValue' 'constrain value _ deadband _ minimum _ maximum _' 'num num num num' 0 0 0 1000
+  spec 'r' 'pid_elapsedTime' 'elapsed time from _ to _' 'num num' 0 0
+  spec 'r' 'pid_computePID' 'compute pid at index _ error _ p coeff _ i coeff _ d coeff _ max integral _ (ignored if 0)' 'num num num num num num' 1 0 1 0 0 0
+  spec ' ' 'pid_resetPID' 'reset pid at index _' 'num' 1
 
-to _extend_pid_lists index {
-  comment 'Extend the global lists used for PID computations,
-if needed, so that they are large enough to use the specified index.
-This must be called by every public block.'
-  _init_pid_library
-  repeatUntil ((size _pid__prev_error) >= index) {
-    '[data:addLast]' 0 _pid__prev_error
-    '[data:addLast]' -1 _pid__prev_usec
-    '[data:addLast]' 0 _pid__prev_integral
+to _pid_extendPIDLists index {
+  comment 'Extend PID's global list variables, if needed,
+so that they are large enough to use the specified index.'
+  _pid_initLibrary
+  repeatUntil ((size _pid__prevError) >= index) {
+    '[data:addLast]' 0 _pid__prevError
+    '[data:addLast]' -1 _pid__prevMicros
+    '[data:addLast]' 0 _pid__prevIntegral
   }
+  comment 'Set _pid__numPIDs so pid_computePID can efficiently decide if the list needs to be extended'
+  _pid__numPIDs = (size _pid__prevError)
 }
 
-to _init_pid_library {
-  comment 'Create global lists. Must be called by every public block,
-  but that can be accomplished by calling _extend_pid_lists.'
+to _pid_initLibrary {
+comment 'Create global lists.'
   if (not _pid__initialized) {
-    _pid__prev_error = (newList 0)
-    _pid__prev_usec = (newList 0)
-    _pid__prev_integral = (newList 0)
+    _pid__prevError = (newList 0)
+    _pid__prevMicros = (newList 0)
+    _pid__prevIntegral = (newList 0)
     _pid__initialized = (booleanConstant true)
   }
 }
 
-to apply_sign sign value {
-    comment 'If sign < 0 return -value else return value'
-    if (sign < 0) {
-        return (-1 * value)
-    } else {
-        return value
-    }
+to pid_applySign sign value {
+  comment 'If sign < 0 return -value else return value'
+  if (sign < 0) {
+    return (-1 * value)
+  } else {
+    return value
+  }
 }
 
-to constrain_value value deadband minimum maximum {
+to pid_constrainValue value deadband minimum maximum {
     comment 'Constrain a value as follows:
 If |value| < deadband: return 0.
 If |value| < minimum: return minimum with sign of value.
 If |value| > maximum: return maximum with sign of value.'
-    local abs_value (absoluteValue value)
-    if (abs_value < deadband) {
-        return 0
-    } (abs_value < minimum) {
-        return (apply_sign value minimum)
-    } (abs_value > maximum) {
-        return (apply_sign value maximum)
-    } else {
-        return value
-    }
+  local 'absValue' (absoluteValue value)
+  if (absValue < deadband) {
+    return 0
+  } (absValue < minimum) {
+    return (pid_applySign value minimum)
+  } (absValue > maximum) {
+    return (pid_applySign value maximum)
+  } else {
+    return value
+  }
 }
 
-to compute_pid index error p_coeff i_coeff d_coeff max_integral {
+to pid_computePID index error pCoeff iCoeff dCoeff maxIntegral {
   comment 'Compute the next PID value value, using inputs:
 * index: index of the PID loop
 * error: error to correct
-* p_coeff: proportional coefficient (corr/error)
-* i_coeff: integral coefficient (corr-msec/error)
-* d_coeff: derivitive coefficient (corr/error-msec)
-* max_integral: maximum absolute value of the integrated error; ignored if 0'
-  _extend_pid_lists index
-  local 'p_value' 0
-  local 'i_value' 0
-  local 'd_value' 0
-  local 'integral' 0
-  local 'curr_usec' (microsOp)
-  local 'prev_usec' (at index _pid__prev_usec)
-  p_value = (p_coeff * error)
-  if (prev_usec >= 0) {
-    comment 'We have old data for this PID loop, so compute derivitive and integral contributions.'
-    local 'delta_usec' (elapsed_time prev_usec curr_usec)
-    local 'diff_error' (error - (at index _pid__prev_error))
-    d_value = (((d_coeff * diff_error) * 1000) / delta_usec)
-    integral = (((error * delta_usec) / 1000) + (at index _pid__prev_integral))
-    if (and (max_integral > 0) ((absoluteValue max_integral) > max_integral)) {
-        integral = (apply_sign integral max_integral)
-    }
-    i_value = (i_coeff * integral)
+* pCoeff: proportional coefficient (corr/error)
+* iCoeff: integral coefficient (corr-msec/error)
+* dCoeff: derivitive coefficient (corr/error-msec)
+* maxIntegral: maximum absolute value of the integrated error; ignored if 0'
+  if (_pid__numPIDs < index) {
+    _pid_extendPIDLists index
   }
-  atPut index _pid__prev_usec curr_usec
-  atPut index _pid__prev_error error
-  atPut index _pid__prev_integral integral
-  return (-1 * (p_value + (i_value + d_value)))
+  local 'pValue' 0
+  local 'iValue' 0
+  local 'dValue' 0
+  local 'integral' 0
+  local 'currMicros' (microsOp)
+  local 'prevMicros' (at index _pid__prevMicros)
+  pValue = (pCoeff * error)
+  if (prevMicros >= 0) {
+    comment 'We have old data for this PID loop, so compute derivitive and integral contributions.'
+    local 'deltaMicros' (pid_elapsedTime prevMicros currMicros)
+    local 'deltaErrorr' (error - (at index _pid__prevError))
+    dValue = (((dCoeff * deltaErrorr) * 1000) / deltaMicros)
+    integral = (((error * deltaMicros) / 1000) + (at index _pid__prevIntegral))
+    if (and (maxIntegral > 0) ((absoluteValue maxIntegral) > maxIntegral)) {
+        integral = (pid_applySign integral maxIntegral)
+    }
+    iValue = (iCoeff * integral)
+  }
+  atPut index _pid__prevMicros currMicros
+  atPut index _pid__prevError error
+  atPut index _pid__prevIntegral integral
+  return (-1 * (pValue + (iValue + dValue)))
 }
 
-to elapsed_time from_time to_time {
+to pid_elapsedTime fromTime toTime {
   comment 'Compute an elapsed time between two microsecond clock values.
 Unlike simple subtraction, this accounts for clock wrap (from 1073741823 to 0).
-Notes as of 2024-04-01:
+Notes as of 2024-04-11:
 * May also be used for millisecond clock values in prerelease firmware, but not release firmware
   (because in release firmware the millisecond clock wraps at a smaller value).
-* The next release should include built-in blocks that perform this same computation.'
-  local 'delta_time' (to_time - from_time)
-  if (delta_time < 0) {
-    delta_time += -1073741824
+* Deprecated: the next release should include built-in blocks that perform this same computation.'
+  local 'deltaTime' (toTime - fromTime)
+  if (deltaTime < 0) {
+    deltaTime += -1073741824
   }
-  return delta_time
+  return deltaTime
 }
 
-to reset_pid index {
+to pid_resetPID index {
   comment 'Zero the recorded error data for a specific PID loop.
 Call this before starting each move, to avoid unwanted values
 from the integral and derivitive terms.'
-  _extend_pid_lists index
-  atPut index _pid__prev_error 0
-  atPut index _pid__prev_usec -1
-  atPut index _pid__prev_integral 0
+  if (_pid__numPIDs < index) {
+    _pid_extendPIDLists index
+  }
+  atPut index _pid__prevError 0
+  atPut index _pid__prevMicros -1
+  atPut index _pid__prevIntegral 0
 }
 
