@@ -14,7 +14,7 @@ variables motors__encoder_position _dcmotors__initialized _dcmotors__num_motors 
   spec ' ' 'move_motor_distance_speed' 'move motor _ distance _ (encoder counts) at speed _ (counts/sec)' 'num num num' 1 585 1000
   spec ' ' 'stop_all_motors' 'stop all motors'
   spec ' ' 'stop_motor' 'stop motor _' 'num' 1
-  spec 'r' '_get_target_position_and_speed' 'get target position and speed for motor _ at time _ (msec, -1 for now)' 'num num' 1 -1
+  spec 'r' '_get_target_position' 'get target position for motor _ at time _ (msec, -1 for now)' 'num num' 1 -1
   spec ' ' '_basic_move_motor_with_effort' '_basic_move_motor_with_effort index _ effort _ (-1023 to 1023)' 'num num' 1 250
 
 to _init_dcmotors_library {
@@ -97,9 +97,7 @@ This is a background task (infinite loop) that must be running in order for move
         reset_pid i
     }
     _init_dcmotors_library
-    local 'target_position_and_speed' 0
     local 'target_position' 0
-    local 'target_speed' 0
     local 'encoder_position' 0
     local 'position_error' 0
     local 'correction' 0
@@ -108,9 +106,7 @@ This is a background task (infinite loop) that must be running in order for move
     forever {
         for i _dcmotors__num_motors {
             if ((at i _dcmotors__target_start_msec) >= 0) {
-                target_position_and_speed = (_get_target_position_and_speed i -1)
-                target_position = (at 1 target_position_and_speed)
-                target_speed = (at 2 target_position_and_speed)
+                target_position = (_get_target_position i -1)
                 encoder_position = (at i motors__encoder_position)
                 comment 'Note: simple subtraction handles encoder wraparound automatically'
                 position_error = (encoder_position - target_position)
@@ -178,11 +174,8 @@ to stop_motor index {
     analogWriteOp (at index _dcmotors__pin_duty_cycle) 0
 }
 
-to _get_target_position_and_speed index at_msec {
+to _get_target_position index at_msec {
     comment 'Compute the target position for the specified motor at the specified time (msec, <0 for now).
-Return a list with two elements:
-* target position (encoder counts)
-* target speed (encoder counts/second).
 Assumes that _init_dcmotors_library has been called.'
     if (at_msec < 0) {
         at_msec = (millisOp)
@@ -194,16 +187,11 @@ Assumes that _init_dcmotors_library has been called.'
     }
     local 'duration_msec' (elapsed_time target_start_msec at_msec)
     local 'target_duration_msec' (at index _dcmotors__target_duration_msec)
-    local 'target_speed' 0
     if (duration_msec > target_duration_msec) {
         comment 'Move is done; target position = end position'
         duration_msec = target_duration_msec
-        target_speed = 0
-    } else {
-        target_speed = (at index _dcmotors__target_speed)
     }
-    local 'target_position' ((at index _dcmotors__target_start_position) + ((duration_msec * (at index _dcmotors__target_speed)) / 1000))
-    return  ('[data:makeList]' target_position target_speed)
+    return ((at index _dcmotors__target_start_position) + ((duration_msec * (at index _dcmotors__target_speed)) / 1000))
 }
 
 to _basic_move_motor_with_effort index effort {
