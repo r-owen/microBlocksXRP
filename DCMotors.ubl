@@ -115,8 +115,10 @@ This is a background task (infinite loop) that must be running in order for move
                 comment 'Note: simple subtraction handles encoder wraparound automatically'
                 position_error = (encoder_position - target_position)
                 correction = (compute_pid i position_error _dcmotors__p_coeff _dcmotors__i_coeff _dcmotors__d_coeff _dcmotors__max_integral)
-                comment 'Compute open loop predicted effort'
+                comment 'Compute open loop predicted effort.'
                 effort = ((target_speed * _dcmotors__max_effort) / _dcmotors__max_speed)
+                comment 'If the predicted effort is too small to be useful,
+set it to 0, in order to make the system more stable at the end of a move.'
                 if ((absoluteValue effort) < _dcmotors__max_effort) {
                     effort = 0
                 }
