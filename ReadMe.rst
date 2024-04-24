@@ -12,8 +12,14 @@ Contains the following microBlocks libraries:
 PID.ubl
 =======
 
-Multiple PID (proportional-integral-differential) controllers.
+One or more PID (proportional-integral-differential) controllers.
 Each controller is specified by a different index: 1, 2, 3...
+
+PID controllers are used to control a system using feedback: measure an error and use this to apply a correction.
+Common examples are operating on oven element or furnace to hold a steady temperature, or controlling an encoded robot wheel to move a specified distance.
+For a robot wheel, you can determine the error by comparing where you want to be with where the motor encoder is telling you that you are.
+Feed the measured error into ``pid_computePID`` and scale the resulting correction to determine a drive signal.
+See "Recommendations for using ``pid_computePID``" for more information.
 
 The main blocks are:
 
@@ -55,18 +61,14 @@ Recommendations for using ``pid_computePID``:
   * Use a non-zero ``dCoeff`` (this is very common when specifying a non-zero ``iCoeff``).
   * Specify a non-zero value for ``maxIntegral``.
 
-* If you can predict the value of the drive signal, definitely try using a "feedforward" signal.
-  This should reduce the size of the PID corrections, which may make your system more responsive and stable.
-  Here is the technique:
+* If you can predict the value of the drive signal, use the prediction as a "feedfoward" signal, as explained here.
+  Done well, this should greatly reduce the size of the PID corrections, which should make your system more responsive and stable.
 
-  * Compute the predicted drive signal (known as the "open loop" calculation).
-  * If your system has a minimum signal needed to do anything useful
-    (such as a geared DC motor, which probably will not operate at low speed),
-    consider setting this predicted signal to 0 if it is too small to be useful.
-  * Compute the PID correction.
-  * Divide the correction by the usual factor (as discussed in the first item in this list), and add it to the predicted drive signal.
+  * Compute the predicted drive signal.
+  * Compute the PID correction and scale it as usual (see the first recommendation) to produce a PID drive signal.
+  * Compute drive signal = predicted drive signal + PID drive signal.
   * Limit the resulting drive signal to a reasonable value using ``pid_constrainValue``, as usual.
-  * TO test the effect, you can easily disable feedfoward by forcing the predicted drive signal to 0.
+
 
 Encoded DC Motors.ubl
 =====================
