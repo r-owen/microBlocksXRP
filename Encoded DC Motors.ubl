@@ -112,7 +112,7 @@ to _edcmotors_driveMotorsToFollowTarget {
         targetSpeed = (at 2 targetPositionAndSpeed)
         encoderPosition = (at i edcmotors__encoderPosition)
         comment 'Note: simple subtraction handles encoder wraparound automatically'
-        positionError = (encoderPosition - targetPosition)
+        positionError = (targetPosition - encoderPosition)
         correction = (pid_computePID i positionError _edcmotors__pCoeff _edcmotors__iCoeff _edcmotors__dCoeff _edcmotors__maxIntegral)
         comment 'Compute predicted ("feed forward") effort.'
         effort = ((targetSpeed * _edcmotors__maxEffort) / _edcmotors__maxSpeed)

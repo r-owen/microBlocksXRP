@@ -92,8 +92,7 @@ to pid_computePID index error pCoeff iCoeff dCoeff maxIntegral {
   atPut index _pid__prevMicros currMicros
   atPut index _pid__prevError error
   atPut index _pid__prevIntegral integral
-  return (-1 * (pValue + (iValue + dValue)))
-}
+  return (pValue + (iValue + dValue))
 }
 
 to pid_resetPID index {
