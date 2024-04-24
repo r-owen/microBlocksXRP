@@ -8,7 +8,6 @@ variables _pid__initialized _pid__numPIDs _pid__prevError _pid__prevMicros _pid_
   spec ' ' '_pid_initLibrary' '_init pid library'
   spec 'r' 'pid_applySign' 'apply sign _ to value _' 'num num' 1 0
   spec 'r' 'pid_constrainValue' 'constrain value _ deadband _ minimum _ maximum _' 'num num num num' 0 0 0 1000
-  spec 'r' 'pid_elapsedTime' 'elapsed time from _ to _' 'num num' 0 0
   spec 'r' 'pid_computePID' 'compute pid at index _ error _ p coeff _ i coeff _ d coeff _ max integral _ (ignored if 0)' 'num num num num num num' 1 0 1 0 0 0
   spec ' ' 'pid_resetPID' 'reset pid at index _' 'num' 1
 
@@ -81,7 +80,7 @@ to pid_computePID index error pCoeff iCoeff dCoeff maxIntegral {
   pValue = (pCoeff * error)
   if (prevMicros >= 0) {
     comment 'We have old data for this PID loop, so compute derivitive and integral contributions.'
-    local 'deltaMicros' (pid_elapsedTime prevMicros currMicros)
+    local 'deltaMicros' (microsSince prevMicros currMicros)
     local 'deltaErrorr' (error - (at index _pid__prevError))
     dValue = (((dCoeff * deltaErrorr) * 1000) / deltaMicros)
     integral = (((error * deltaMicros) / 1000) + (at index _pid__prevIntegral))
@@ -95,19 +94,6 @@ to pid_computePID index error pCoeff iCoeff dCoeff maxIntegral {
   atPut index _pid__prevIntegral integral
   return (-1 * (pValue + (iValue + dValue)))
 }
-
-to pid_elapsedTime fromTime toTime {
-  comment 'Compute an elapsed time between two microsecond clock values.
-Unlike simple subtraction, this accounts for clock wrap (from 1073741823 to 0).
-Notes as of 2024-04-11:
-* May also be used for millisecond clock values in prerelease firmware, but not release firmware
-  (because in release firmware the millisecond clock wraps at a smaller value).
-* Deprecated: the next release should include built-in blocks that perform this same computation.'
-  local 'deltaTime' (toTime - fromTime)
-  if (deltaTime < 0) {
-    deltaTime += -1073741824
-  }
-  return deltaTime
 }
 
 to pid_resetPID index {

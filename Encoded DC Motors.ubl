@@ -198,7 +198,7 @@ to _edcmotors_getTargetPositionAndSpeed index atMillis {
     sayIt 'Warning: no target; returning 0, 0'
     return ('[data:makeList]' 0 0)
   }
-  local 'durationMillis' (pid_elapsedTime targetStartMillis atMillis)
+  local 'durationMillis' (millisSince targetStartMillis atMillis)
   local 'targetDurationMillis' (at index _edcmotors__targetDurationMillis)
   local 'targetSpeed' 0
   if (durationMillis > targetDurationMillis) {
