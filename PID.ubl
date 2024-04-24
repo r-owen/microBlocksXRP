@@ -36,11 +36,7 @@ comment 'Create global lists.'
 
 to pid_applySign sign value {
   comment 'If sign < 0 return -value else return value'
-  if (sign < 0) {
-    return (-1 * value)
-  } else {
-    return value
-  }
+  return (ifExpression (sign >= 0) value (-1 * value))
 }
 
 to pid_constrainValue value deadband minimum maximum {

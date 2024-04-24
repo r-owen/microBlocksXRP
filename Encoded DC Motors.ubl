@@ -19,8 +19,8 @@ variables edcmotors__encoderPosition _edcmotors__initialized _edcmotors__numMoto
 
 to _edcmotors_initLibrary {
   comment 'Initialize the DC Motors library.
-    Check motor power and initialize variables (if not already initialized).
-    Defaults to an XRP robot kit with 2 motors; change this code for other systems'
+Check motor power and initialize variables (if not already initialized).
+Defaults to an XRP robot kit with 2 motors; change this code for other systems'
   if (not _edcmotors__initialized) {
     _edcmotors__numMotors = (edcmotors_getNumMotors)
     if (_edcmotors__numMotors == 0) {
@@ -38,7 +38,7 @@ to _edcmotors_initLibrary {
 
 to _edcmotors_initVariables {
   comment 'Initialize variables whose values do not depend on the type of system,
-    and create all lists (but do not set values) of variables that are system-specific.'
+and create all lists (but do not set values) of variables that are system-specific.'
   edcmotors__encoderPosition = (newList _edcmotors__numMotors 0)
   _edcmotors__targetStartPosition = (newList _edcmotors__numMotors 0)
   _edcmotors__targetSpeed = (newList _edcmotors__numMotors 0)
@@ -55,9 +55,9 @@ to _edcmotors_initVariables {
 
 to _edcmotors_monitorEncoders {
   comment 'Monitor the motor encoders.
-    This is a background tasks (and an infinite loop) which must be running
-    in order for the remaining code to know where the wheels are.
-    The encoders are assumed to be quadrature incremental encoders.'
+This is a background tasks (and an infinite loop) which must be running
+in order for the remaining code to know where the wheels are.
+The encoders are assumed to be quadrature incremental encoders.'
   _edcmotors_initLibrary
   local 'encoderAState' (booleanConstant false)
   local 'encoderBState' (booleanConstant false)
@@ -71,18 +71,12 @@ to _edcmotors_monitorEncoders {
       prevEncoderBState = (at i _edcmotors__prevEncoderBState)
       if (encoderAState != prevEncoderAState) {
         atPut i _edcmotors__prevEncoderAState encoderAState
-        if (encoderAState == encoderBState) {
-          atPut i edcmotors__encoderPosition ((at i edcmotors__encoderPosition) - 1)
-        } else {
-          atPut i edcmotors__encoderPosition ((at i edcmotors__encoderPosition) + 1)
-        }
+        atPut i edcmotors__encoderPosition (
+          (at i edcmotors__encoderPosition) + (ifExpression (encoderAState == encoderBState) -1 1))
       } (encoderBState != prevEncoderBState) {
         atPut i _edcmotors__prevEncoderBState encoderBState
-        if (encoderAState == encoderBState) {
-          atPut i edcmotors__encoderPosition ((at i edcmotors__encoderPosition) + 1)
-        } else {
-          atPut i edcmotors__encoderPosition ((at i edcmotors__encoderPosition) - 1)
-        }
+        atPut i edcmotors__encoderPosition (
+          (at i edcmotors__encoderPosition) + (ifExpression (encoderAState == encoderBState) 1 -1))
       }
     }
   }
@@ -90,8 +84,8 @@ to _edcmotors_monitorEncoders {
 
 to _edcmotors_driveMotorsToFollowTarget {
   comment 'Drive motors to follow the specified target position and speed.
-    This is a background task (infinite loop) that must be running,
-    in order for edcmotors_moveMotorDistanceSpeed to work.'
+This is a background task (infinite loop) that must be running,
+in order for edcmotors_moveMotorDistanceSpeed to work.'
   for i _edcmotors__numMotors {
     pid_resetPID i
   }
@@ -141,20 +135,20 @@ to edcmotors_resetMotorEncoder index {
 
 to edcmotors_moveMotorWithEffort index effort {
     comment 'Move the specified motor at the specified "effort", a value between -1023 and 1023.
-      Effort is the duty cycle of the drive signal to the motor (plus a sign signal),
-      and is roughly proportional to speed, at least if the motor has no load.
-      Warning:  geared motors have enough friction that they may not reliably move at low speeds.
-      For example the XRP wheels may not reliably move if the absolute value of effort is less than about 200.
-      Thus the usable range of effort is usually rather small.'
+Effort is the duty cycle of the drive signal to the motor (plus a sign signal),
+and is roughly proportional to speed, at least if the motor has no load.
+Warning:  geared motors have enough friction that they may not reliably move at low speeds.
+For example the XRP wheels may not reliably move if the absolute value of effort is less than about 200.
+Thus the usable range of effort is usually rather small.'
     _edcmotors_initLibrary
     _edcmotors_basicDriveMotorsWithEffort index effort
 }
 
 to edcmotors_moveMotorDistanceSpeed index distance speed {
   comment 'Move the specified motor by the specified amount (encoder counts) at the specified speed (counts/sec).
-    To move backwards, specify a negative distance.
-    Negating speed has no effect (this block always uses the absolute value of speed).
-    Warning: speed must not be 0.'
+To move backwards, specify a negative distance.
+Negating speed has no effect (this block always uses the absolute value of speed).
+Warning: speed must not be 0.'
   if (speed == 0) {
     sayIt 'Error: speed must be nonzero'
     return
@@ -162,7 +156,7 @@ to edcmotors_moveMotorDistanceSpeed index distance speed {
   _edcmotors_initLibrary
   local 'durationMillis' (((absoluteValue distance) * 1000) / speed)
   comment 'Always start by setting time <0, set all other parameters, then set the real time.
-    This avoids race conditions.'
+This avoids race conditions.'
   speed = (absoluteValue speed)
   atPut index _edcmotors__targetStartMillis -1
   atPut index _edcmotors__targetStartPosition (at index edcmotors__encoderPosition)
@@ -186,10 +180,10 @@ to edcmotors_stopMotor index {
 
 to _edcmotors_getTargetPositionAndSpeed index atMillis {
   comment 'Compute the target position for the specified motor at the specified time (msec, <0 for now).
-    Return a list with two elements:
-    * target position (encoder counts)
-    * target speed (encoder counts/second).
-    Assumes that _edcmotors_initLibrary has been called.'
+Return a list with two elements:
+* target position (encoder counts)
+* target speed (encoder counts/second).
+Assumes that _edcmotors_initLibrary has been called.'
   if (atMillis < 0) {
     atMillis = (millisOp)
   }
