@@ -32,7 +32,7 @@ Defaults to an XRP robot kit with 2 motors; change this code for other systems'
     _edcmotors_initSystemVariables
     _edcmotors__initialized = (booleanConstant true)
   }
-  _edcmotors_check_system
+  _edcmotors_checkSystem
   sendBroadcast '_edcmotors_monitorEncoders'
   sendBroadcast '_edcmotors_driveMotorsToFollowTarget'
 }
