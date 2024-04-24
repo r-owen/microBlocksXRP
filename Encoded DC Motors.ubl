@@ -12,6 +12,7 @@ variables edcmotors__encoderPosition _edcmotors__initialized _edcmotors__numMoto
   spec ' ' 'edcmotors_resetMotorEncoder' 'reset motor encoder index _' 'num' 1
   spec ' ' 'edcmotors_moveMotorWithEffort' 'move motor _ with effort _ (-1023 to 1023)' 'num num' 1 250
   spec ' ' 'edcmotors_moveMotorDistanceSpeed' 'move motor _ distance _ (encoder counts) at speed _ (counts/sec)' 'num num num' 1 585 1000
+  spec ' ' 'edcmotors_moveMotorSpeed' 'move motor _ at speed _ (counts/sec)' 'num num' 1 1000
   spec ' ' 'edcmotors_stopAllMotors' 'stop all motors'
   spec ' ' 'edcmotors_stopMotor' 'stop motor _' 'num' 1
   spec 'r' '_edcmotors_getTargetPositionAndSpeed' 'get target position and speed for motor _ at time _ (msec, -1 for now)' 'num num' 1 -1
@@ -155,13 +156,30 @@ Warning: speed must not be 0.'
   }
   _edcmotors_initLibrary
   local 'durationMillis' (((absoluteValue distance) * 1000) / speed)
-  comment 'Always start by setting time <0, set all other parameters, then set the real time.
+  comment 'Always start by setting start time <0, set all other parameters, then set the correct start time.
 This avoids race conditions.'
   speed = (absoluteValue speed)
   atPut index _edcmotors__targetStartMillis -1
   atPut index _edcmotors__targetStartPosition (at index edcmotors__encoderPosition)
   atPut index _edcmotors__targetSpeed (pid_applySign distance speed)
   atPut index _edcmotors__targetDurationMillis durationMillis
+  atPut index _edcmotors__targetStartMillis (millisOp)
+}
+
+to edcmotors_moveMotorSpeed index speed {
+  comment 'Move the specified motor at the specified speed (counts/sec).'
+  if (speed == 0) {
+    sayIt 'Error: speed must be nonzero'
+    return
+  }
+  _edcmotors_initLibrary
+  local 'durationMillis' (((absoluteValue distance) * 1000) / speed)
+  comment 'Always start by setting start time <0, set all other parameters, then set the correct start time.
+This avoids race conditions.'
+  atPut index _edcmotors__targetStartMillis -1
+  atPut index _edcmotors__targetStartPosition (at index edcmotors__encoderPosition)
+  atPut index _edcmotors__targetSpeed speed
+  atPut index _edcmotors__targetDurationMillis 0
   atPut index _edcmotors__targetStartMillis (millisOp)
 }
 
@@ -195,7 +213,7 @@ Assumes that _edcmotors_initLibrary has been called.'
   local 'durationMillis' (millisSince targetStartMillis atMillis)
   local 'targetDurationMillis' (at index _edcmotors__targetDurationMillis)
   local 'targetSpeed' 0
-  if (durationMillis > targetDurationMillis) {
+  if (and (targetDurationMillis > 0) (durationMillis > targetDurationMillis)) {
     comment 'Move is done; target position = end position'
     durationMillis = targetDurationMillis
     targetSpeed = 0
