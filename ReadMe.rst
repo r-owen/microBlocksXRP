@@ -36,8 +36,8 @@ The main blocks are:
 * ``pid_resetPID``: reset the specified PID loop.
   It may be useful to reset a PID before commanding a new move.
 
-* ``pid_constrainValue``: limit the range of a value, intended to post-process a scaled correction from a PID loop.
-  This may be used to constrain the correction returned by ``pid_computePID`` to useful values.
+* ``pid_constrainValue``: limit the range of a value.
+  This is provided to constrain the drive signal to useful values.
   The algorithm is as follows (where ``|value|`` means the absolute value of ``value``):
 
   * If ``|value| < deadband``: return 0.
@@ -46,7 +46,7 @@ The main blocks are:
     This prevents applying a correction that is too small to do anything useful.
     For example the WPI XRP motor drives cannot reliably move when the effort is less than about 200.
   * If ``|value| > maximum``: return ``maximum`` with the sign of ``value``.'
-    This prevents applying more correction than the system can handle.
+    This prevents demanding more than the system can handle.
     For example the WPI XRP motor drives have a maximum "effort" of 1023.
 
 Recommendations for using ``pid_computePID``:
@@ -55,7 +55,7 @@ Recommendations for using ``pid_computePID``:
   Then divide the resulting correction by a suitable factor to get your drive signal.
   This helps compensate for the lack of floating=point values in microBlocks.
 * Limit the resulting drive signal to reasonable values using ``pid_constrainValue``.
-* Using a non-zero ``iCoeff`` can easily lead to oscillations or instability.
+* A non-zero ``iCoeff`` can easily lead to oscillations or instability.
   To make the system more stable you can try either or both of the following:
   
   * Use a non-zero ``dCoeff`` (this is very common when specifying a non-zero ``iCoeff``).
@@ -80,14 +80,19 @@ This library requires the ``PID.ubl`` library.
 This library must be configured by a board-specific library in order to control that board.
 The board-specific library must define the following blocks (which take no arguments):
 
-* ``edcmotors_getNumMotors``: return the number of DC motors supported by your system.
+* ``edcmotors_getNumMotors``: return the number of DC motors you are using.
 * ``_edcmotors_initSystemVariables``: initialize system-specific 'Encoded DC Motors' variables.
+* ``_edcmotors_checkSystem``: check that the motors are powered on, or similar.
+  This block is optional, but highly recommended if there is anything the user must do to run the motors.
+  For example the XRP has a power switch that must be on to run the motors, but not to program the board via USB.
+  That makes it very easy to forget to turn on the power switch switch.
 
 See ``XRP.ubl`` for an example.
 
 The main 'Encoded DC Motors' blocks:
 
-* ``edcmotors_moveMotorDistanceSpeed``: move the specified motor by the specified number of encoder counts.
+* ``edcmotors_moveMotorDistanceSpeed``: move the specified motor the specified distance (encoder counts), at the specified speed (counts/second).
+* ``edcmotors_moveMotorSpeed``: move the specified motor at the specified speed (encoder counts/second), indefinitely.
 * ``edcmotors_stopAllMotors``: stop all motors.
 * ``edcmotors_stopMotor``: stop the specified motor.
 
