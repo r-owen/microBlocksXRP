@@ -15,6 +15,7 @@ variables edcmotors__encoderPosition _edcmotors__initialized _edcmotors__numMoto
   spec ' ' 'edcmotors_moveMotorSpeed' 'move motor _ at speed _ (encoder counts/sec) for _ milliseconds (0=forever)' 'num num num' 1 1000 2
   spec ' ' 'edcmotors_stopAllMotors' 'stop all motors'
   spec ' ' 'edcmotors_stopMotor' 'stop motor _' 'num' 1
+  spec ' ' 'edcmotors_waitMotors' 'wait for motors'
   spec 'r' '_edcmotors_getTargetPositionAndSpeed' 'get target position and speed for motor _ at time _ (msec, -1 for now)' 'num num' 1 -1
   spec ' ' '_edcmotors_basicDriveMotorsWithEffort' '_basic drive motor index _ with effort _ (-1023 to 1023)' 'num num' 1 250
 
@@ -192,6 +193,15 @@ to edcmotors_stopMotor index {
   atPut index _edcmotors__targetStartMillis -1
   atPut index _edcmotors__targetSpeed 0
   analogWriteOp (at index _edcmotors__pinDutyCycle) 0
+}
+
+to edcmotors_waitMotors {
+  comment 'Wait for all current motor moves to stop'
+  local 'durationMillis' 0
+  for i _edcmotors__numMotors {
+    durationMillis = (maximum durationMillis (at i _edcmotors__targetDurationMillis))
+  }
+  waitMillis durationMillis
 }
 
 to _edcmotors_getTargetPositionAndSpeed index atMillis {
