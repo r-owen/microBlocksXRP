@@ -1,6 +1,6 @@
 module 'XRP'
 author 'Russell Owen'
-version 0 3
+version 0 4
 description 'Drive the WPI XRP robot'
 depends 'Encoded DC Motors' Servo 'Distance (HC-SR04)'
 variables _xrp__imuAddress
@@ -10,11 +10,13 @@ variables _xrp__imuAddress
   spec 'r' 'edcmotors_getNumMotors' 'get the number of encoded DC motors'
   spec ' ' 'xrp_driveDistance' 'drive distance _ (encoder counts) speed _ (counts/sec)' 'num num' 100 400
   spec 'r' 'xrp_readRollPitchYaw' 'read roll, pitch, and yaw (deg/sec)'
+  spec 'r' 'xrp_readYaw' 'read yaw (deg/sec)'
   spec 'r' 'xrp_readDistanceSensor' 'read distance sensor (cm)'
   spec 'r' 'xrp_readLineSensors' 'read line sensors L,R (raw)'
   spec ' ' 'xrp_setServo' 'set servo _ to angle _ (degrees)' 'num num' 1 0
   spec ' ' 'xrp_turnAngle' 'turn angle _ (degrees) at motor speed _ (encoder counts/sec)' 'num num' 90 400
   spec 'r' '_xrp_scaleRollPitchOrYaw' 'scale gyro raw roll, pitch, or yaw _' 'num' 10
+  spec ' ' '_xrp_initGyroscope' 'init gyroscope'
 
 to '_edcmotors_checkSystem' {
   comment 'Check the XRP board's drive power.'
@@ -31,13 +33,6 @@ to '_edcmotors_initSystemVariables' {
     sayIt 'Number of motors must be 2-4'
     return
   }
-  _xrp__imuAddress = (hexToInt '6B')
-  comment 'Configure the LSM6DSOX IMU gyroscope:
-* Read at 1660 Hz (a fairly high rate)
-* Maximum roll, pitch, or yaw is 250 deg/sec (the 2nd-most-sensitive range)
-See section 9.16 of https://www.st.com/resource/en/datasheet/lsm6dsox.pdf for details.'
-  i2cSet _xrp__imuAddress (hexToInt '11') (hexToInt '80')
-
   _edcmotors__pCoeff = 2000
   _edcmotors__iCoeff = 0
   _edcmotors__dCoeff = 0
@@ -93,16 +88,22 @@ to xrp_readLineSensors {
 
 to xrp_readRollPitchYaw {
     comment 'Read roll, pitch, and yaw (deg/sec) from the gyroscope'
-    local '_xrp__imuAddress' (hexToInt '6B')
-    comment 'Set the accelerometer/gyro device register 0x11 to 0x80 for 1660 Hz rate
-        This activates the gyro data registers for X, Y and Z.
-        Reference: https://www.st.com/resource/en/datasheet/lsm6dsl.pdf p.61'
-    i2cSet _xrp__imuAddress (hexToInt '11') (hexToInt '80')
+    if (_xrp__imuAddress == 0) {
+      _xrp_initGyroscope
+    }
     return ('[data:makeList]' (
       _xrp_scaleRollPitchOrYaw (i2cGet _xrp__imuAddress 37)) (
       _xrp_scaleRollPitchOrYaw (i2cGet _xrp__imuAddress 35)) (
       -1 * (_xrp_scaleRollPitchOrYaw (i2cGet _xrp__imuAddress 39)))
     )
+}
+
+to xrp_readYaw {
+    comment 'Read yaw (deg/sec) from the gyroscope'
+    if (_xrp__imuAddress == 0) {
+      _xrp_initGyroscope
+    }
+    return (-1 * (_xrp_scaleRollPitchOrYaw (i2cGet _xrp__imuAddress 39)))
 }
 
 to xrp_setServo index angle {
@@ -137,4 +138,14 @@ with the following unusual subranges:
     comment 'Scale the result to degrees/second'
     speed = ((speed * 250) / 127)
     return speed
+}
+
+to _xrp_initGyroscope {
+  comment 'Initialize the gyroscope'
+  _xrp__imuAddress = (hexToInt '6B')
+  comment 'Configure the LSM6DSOX IMU gyroscope:
+* Read at 1660 Hz (a fairly high rate)
+* Maximum roll, pitch, or yaw is 250 deg/sec (the 2nd-most-sensitive range)
+See section 9.16 of https://www.st.com/resource/en/datasheet/lsm6dsox.pdf for details.'
+  i2cSet _xrp__imuAddress (hexToInt '11') (hexToInt '80')
 }
