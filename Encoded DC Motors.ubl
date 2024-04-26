@@ -1,6 +1,6 @@
 module 'Encoded DC Motors'
 author 'Russell Owen'
-version 0 3
+version 0 4
 description 'Drive DC motors with encoders'
 depends PID
 variables edcmotors__encoderPosition _edcmotors__initialized _edcmotors__numMotors _edcmotors__maxSpeed _edcmotors__pinDutyCycle _edcmotors__pinEncoderA _edcmotors__pinEncoderB _edcmotors__pinDirection _edcmotors__prevEncoderAState _edcmotors__prevEncoderBState _edcmotors__targetStartPosition _edcmotors__targetSpeed _edcmotors__targetStartMillis _edcmotors__targetDurationMillis _edcmotors__pCoeff _edcmotors__iCoeff _edcmotors__dCoeff _edcmotors__deadband _edcmotors__minEffort _edcmotors__maxEffort _edcmotors__maxIntegral
@@ -12,9 +12,10 @@ variables edcmotors__encoderPosition _edcmotors__initialized _edcmotors__numMoto
   spec ' ' 'edcmotors_resetMotorEncoder' 'reset motor encoder index _' 'num' 1
   spec ' ' 'edcmotors_moveMotorWithEffort' 'move motor _ with effort _ (-1023 to 1023)' 'num num' 1 250
   spec ' ' 'edcmotors_moveMotorDistanceSpeed' 'move motor _ distance _ (encoder counts) at speed _ (counts/sec)' 'num num num' 1 585 1000
-  spec ' ' 'edcmotors_moveMotorSpeed' 'move motor _ at speed _ (counts/sec)' 'num num' 1 1000
+  spec ' ' 'edcmotors_moveMotorSpeed' 'move motor _ at speed _ (encoder counts/sec) for _ milliseconds (0=forever)' 'num num num' 1 1000 2
   spec ' ' 'edcmotors_stopAllMotors' 'stop all motors'
   spec ' ' 'edcmotors_stopMotor' 'stop motor _' 'num' 1
+  spec ' ' 'edcmotors_waitMotors' 'wait for motors'
   spec 'r' '_edcmotors_getTargetPositionAndSpeed' 'get target position and speed for motor _ at time _ (msec, -1 for now)' 'num num' 1 -1
   spec ' ' '_edcmotors_basicDriveMotorsWithEffort' '_basic drive motor index _ with effort _ (-1023 to 1023)' 'num num' 1 250
 
@@ -148,14 +149,13 @@ Thus the usable range of effort is usually rather small.'
 to edcmotors_moveMotorDistanceSpeed index distance speed {
   comment 'Move the specified motor by the specified amount (encoder counts) at the specified speed (counts/sec).
 To move backwards, specify a negative distance.
-Negating speed has no effect (this block always uses the absolute value of speed).
 Warning: speed must not be 0.'
   if (speed == 0) {
     sayIt 'Error: speed must be nonzero'
     return
   }
   _edcmotors_initLibrary
-  local 'durationMillis' (((absoluteValue distance) * 1000) / speed)
+  local 'durationMillis' (absoluteValue ((distance * 1000) / speed))
   comment 'Always start by setting start time <0, set all other parameters, then set the correct start time.
 This avoids race conditions.'
   speed = (absoluteValue speed)
@@ -166,20 +166,19 @@ This avoids race conditions.'
   atPut index _edcmotors__targetStartMillis (millisOp)
 }
 
-to edcmotors_moveMotorSpeed index speed {
-  comment 'Move the specified motor at the specified speed (counts/sec).'
+to edcmotors_moveMotorSpeed index speed durationMillis {
+  comment 'Move the specified motor at the specified speed (counts/sec) for the specified duration (milliseconds; 0=forever).'
   if (speed == 0) {
     sayIt 'Error: speed must be nonzero'
     return
   }
   _edcmotors_initLibrary
-  local 'durationMillis' (((absoluteValue distance) * 1000) / speed)
   comment 'Always start by setting start time <0, set all other parameters, then set the correct start time.
 This avoids race conditions.'
   atPut index _edcmotors__targetStartMillis -1
   atPut index _edcmotors__targetStartPosition (at index edcmotors__encoderPosition)
   atPut index _edcmotors__targetSpeed speed
-  atPut index _edcmotors__targetDurationMillis 0
+  atPut index _edcmotors__targetDurationMillis durationMillis
   atPut index _edcmotors__targetStartMillis (millisOp)
 }
 
@@ -194,6 +193,15 @@ to edcmotors_stopMotor index {
   atPut index _edcmotors__targetStartMillis -1
   atPut index _edcmotors__targetSpeed 0
   analogWriteOp (at index _edcmotors__pinDutyCycle) 0
+}
+
+to edcmotors_waitMotors {
+  comment 'Wait for all current motor moves to stop'
+  local 'durationMillis' 0
+  for i _edcmotors__numMotors {
+    durationMillis = (maximum durationMillis (at i _edcmotors__targetDurationMillis))
+  }
+  waitMillis durationMillis
 }
 
 to _edcmotors_getTargetPositionAndSpeed index atMillis {
