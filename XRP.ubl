@@ -10,7 +10,6 @@ variables _xrp__imuAddress
   spec 'r' 'edcmotors_getNumMotors' 'get the number of encoded DC motors'
   spec ' ' 'xrp_driveDistance' 'drive distance _ (encoder counts) speed _ (counts/sec)' 'num num' 100 400
   spec 'r' 'xrp_readRollPitchYaw' 'read roll, pitch, and yaw (deg/sec)'
-  spec 'r' 'xrp_readUserButton' 'read user button'
   spec 'r' 'xrp_readDistanceSensor' 'read distance sensor (cm)'
   spec 'r' 'xrp_readLineSensors' 'read line sensors L,R (raw)'
   spec ' ' 'xrp_setServo' 'set servo _ to angle _ (degrees)' 'num num' 1 0
@@ -104,10 +103,6 @@ to xrp_readRollPitchYaw {
       _xrp_scaleRollPitchOrYaw (i2cGet _xrp__imuAddress 35)) (
       -1 * (_xrp_scaleRollPitchOrYaw (i2cGet _xrp__imuAddress 39)))
     )
-}
-
-to xrp_readUserButton {
-  return (not (digitalReadOp 22))
 }
 
 to xrp_setServo index angle {
