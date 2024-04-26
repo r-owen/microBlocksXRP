@@ -9,6 +9,7 @@ variables _xrp__imuAddress
   spec ' ' '_edcmotors_initSystemVariables' '_edcmotors_initSystemVariables'
   spec 'r' 'edcmotors_getNumMotors' 'get the number of encoded DC motors'
   spec ' ' 'xrp_driveDistance' 'drive distance _ (encoder counts) speed _ (counts/sec)' 'num num' 100 400
+  spec ' ' 'xrp_driveLeftRightSpeed' 'drive left _ right _ speed (encoder counts/sec) for _ milliseconds (0=forever)' 'num num num' 1000 1000 2000
   spec 'r' 'xrp_readRollPitchYaw' 'read roll, pitch, and yaw (deg/sec)'
   spec 'r' 'xrp_readYaw' 'read yaw (deg/sec)'
   spec 'r' 'xrp_readDistanceSensor' 'read distance sensor (cm)'
@@ -75,6 +76,12 @@ to xrp_driveDistance distance speed {
   comment 'Drive the wheels the specified distance (encoder counts) at the specified speed (counts/second)'
   edcmotors_moveMotorDistanceSpeed 1 distance speed
   edcmotors_moveMotorDistanceSpeed 2 (-1 * distance) speed
+}
+
+to xrp_driveLeftRightSpeed leftSpeed rightSpeed durationMillis {
+  comment 'Drive the wheels at the specified speed (encoder counts/sec) for the specified duration (milliseconds; 0=forever)'
+  edcmotors_moveMotorSpeed 1 leftSpeed durationMillis
+  edcmotors_moveMotorSpeed 2 (-1 * rightSpeed) durationMillis
 }
 
 to 'xrp_readDistanceSensor' {
