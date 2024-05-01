@@ -1,23 +1,124 @@
 module 'XRP'
 author 'Russell Owen'
-version 0 4
+version 0 5
 description 'Drive the WPI XRP robot'
 depends 'Encoded DC Motors' Servo 'Distance (HC-SR04)'
 variables _xrp__imuAddress
 
+  spec ' ' 'xrp_driveDistance' 'drive distance _ (mm) speed _ (mm/sec)' 'num num' 100 300
+  spec ' ' 'xrp_driveAtSpeed' 'drive at speed left _ right _ (mm/sec) for _ millisec (0=forever)' 'num num num' 1000 1000 2000
+  spec 'r' 'xrp_readRollRate' 'read roll rate (deg/sec)'
+  spec 'r' 'xrp_readPitchRate' 'read pitch rate (deg/sec)'
+  spec 'r' 'xrp_readYawRate' 'read yaw rate (deg/sec)'
+  spec 'r' 'xrp_readDistanceSensor' 'read distance sensor (cm)'
+  spec 'r' 'xrp_readLineSensors' 'read left, right line sensors'
+  spec ' ' 'xrp_setServo' 'set servo _ to angle _ (deg)' 'num num' 1 0
+  spec ' ' 'xrp_turnAngle' 'turn angle _ (deg) at motor speed _ (mm/sec)' 'num num' 90 300
+  spec ' ' 'xrp_waitForWheelsToStop' 'wait for wheels to stop'
+  space
+  spec 'r' 'edcmotors_getNumMotors' 'get the number of encoded DC motors'
+  spec 'r' 'xrp_mmToCounts' 'convert _ mm to encoder counts' 'num' 0
+  space
   spec ' ' '_edcmotors_checkSystem' '_edcmotors_checkSystem'
   spec ' ' '_edcmotors_initSystemVariables' '_edcmotors_initSystemVariables'
-  spec 'r' 'edcmotors_getNumMotors' 'get the number of encoded DC motors'
-  spec ' ' 'xrp_driveDistance' 'drive distance _ (encoder counts) speed _ (counts/sec)' 'num num' 100 400
-  spec ' ' 'xrp_driveLeftRightSpeed' 'drive left _ right _ speed (encoder counts/sec) for _ milliseconds (0=forever)' 'num num num' 1000 1000 2000
-  spec 'r' 'xrp_readRollPitchYaw' 'read roll, pitch, and yaw (deg/sec)'
-  spec 'r' 'xrp_readYaw' 'read yaw (deg/sec)'
-  spec 'r' 'xrp_readDistanceSensor' 'read distance sensor (cm)'
-  spec 'r' 'xrp_readLineSensors' 'read line sensors L,R (raw)'
-  spec ' ' 'xrp_setServo' 'set servo _ to angle _ (degrees)' 'num num' 1 0
-  spec ' ' 'xrp_turnAngle' 'turn angle _ (degrees) at motor speed _ (encoder counts/sec)' 'num num' 90 400
-  spec 'r' '_xrp_scaleRollPitchOrYaw' 'scale gyro raw roll, pitch, or yaw _' 'num' 10
-  spec ' ' '_xrp_initGyroscope' 'init gyroscope'
+  spec 'r' '_xrp_scaleRollPitchOrYaw' '_scale gyro raw roll, pitch, or yaw _' 'num' 10
+  spec ' ' '_xrp_initGyroscope' '_init gyroscope'
+
+to xrp_driveDistance distance speed {
+  comment 'Drive the wheels the specified distance (mm) at the specified speed (mm/second)'
+  if (speed == 0) {
+    sayIt 'Speed must be nonzero'
+    return
+  }
+  local distanceCounts (xrp_mmToCounts distance)
+  local speedCounts (xrp_mmToCounts speed)
+  local durationMillis (distanceCounts * 1000 / speedCounts)
+  edcmotors_moveMotorAtSpeed 1 speedCounts durationMillis
+  edcmotors_moveMotorAtSpeed 2 (-1 * speedCounts) durationMillis
+  edcmotors_waitForMotorsToStart 1 2
+}
+
+to xrp_driveAtSpeed leftSpeed rightSpeed durationMillis {
+  comment 'Drive the wheels at the specified speed (mm/sec) for the specified duration (milliseconds; 0=forever)'
+  edcmotors_moveMotorAtSpeed 1 (xrp_mmToCounts leftSpeed) durationMillis
+  edcmotors_moveMotorAtSpeed 2 (-1 * (xrp_mmToCounts rightSpeed)) durationMillis
+  edcmotors_waitForMotorsToStart 1 2
+}
+
+to xrp_readRollRate {
+    comment 'Read roll (deg/sec) from the gyroscope'
+    if (_xrp__imuAddress == 0) {
+      _xrp_initGyroscope
+    }
+    return (_xrp_scaleRollPitchOrYaw (i2cGet _xrp__imuAddress 37))
+}
+
+to xrp_readPitchRate {
+    comment 'Read pitch (deg/sec) from the gyroscope'
+    if (_xrp__imuAddress == 0) {
+      _xrp_initGyroscope
+    }
+    return (_xrp_scaleRollPitchOrYaw (i2cGet _xrp__imuAddress 35))
+}
+
+to xrp_readYawRate {
+    comment 'Read yaw (deg/sec) from the gyroscope'
+    if (_xrp__imuAddress == 0) {
+      _xrp_initGyroscope
+    }
+    return (-1 * (_xrp_scaleRollPitchOrYaw (i2cGet _xrp__imuAddress 39)))
+}
+
+to xrp_readDistanceSensor {
+  comment 'Return the distance (cm) read by the HC-SR04 distance sensor.'
+  return ('distance (cm)' 20 21)
+}
+
+to xrp_readLineSensors {
+  return ('[data:makeList]' (analogReadOp 26) (analogReadOp 27))
+}
+
+to xrp_setServo index angle {
+  _edcmotors_checkSystem
+  if (index == 1) {
+    setServoAngle 16 angle
+  } (index == 2) {
+    setServoAngle 17 angle
+  } else {
+    sayIt 'Invalid servo index; must be 1 or 2'
+  }
+}
+
+to xrp_turnAngle angle speed {
+  comment 'Turn the robot by the specified angle (degrees),
+moving the wheel at the specified speed (mm/second).
+Rotate about a point halfway between the wheels.'
+  local 'speedCounts' (pid_applySign angle (xrp_mmToCounts speed))
+  local 'distanceCounts' ((41978 * angle) / 10000)
+  local 'durationMillis' (absoluteValue ((distanceCounts * 1000) / speedCounts))
+  edcmotors_moveMotorAtSpeed 1 speedCounts durationMillis
+  edcmotors_moveMotorAtSpeed 2 speedCounts durationMillis
+  edcmotors_waitForMotorsToStart 1 2
+}
+
+to xrp_waitForWheelsToStop {
+  comment 'Wait for both wheels to stop. This is based on predicted end time,
+rather than actual motion, so it is not exact.'
+  edcmotors_waitForMotorsToStop 1 2
+}
+
+to edcmotors_getNumMotors {
+  comment 'Get the number of motors. The standard XRP kit comes with 2 motors that drive wheels,
+    but the board can drive up to 4 motors. If you are using more than 2 motors,
+    override this method to return how many you are using. Never return less than 2.'
+  return 2
+}
+
+to xrp_mmToCounts mm {
+  comment 'Convert mm to encoder counts.
+Use a hard-coded constant to avoid having to check initialization.'
+  return ((mm * 1000) / 322)
+}
 
 to '_edcmotors_checkSystem' {
   comment 'Check the XRP board's drive power.'
@@ -63,73 +164,6 @@ to '_edcmotors_initSystemVariables' {
     atPut 4 _edcmotors__pinDirection 10
     atPut 4 _edcmotors__pinDutyCycle 11
   }
-}
-
-to 'edcmotors_getNumMotors' {
-  comment 'Get the number of motors. The standard XRP kit comes with 2 motors that drive wheels,
-    but the board can drive up to 4 motors. If you are using more than 2 motors,
-    override this method to return how many you are using. Never return less than 2.'
-  return 2
-}
-
-to xrp_driveDistance distance speed {
-  comment 'Drive the wheels the specified distance (encoder counts) at the specified speed (counts/second)'
-  edcmotors_moveMotorDistanceSpeed 1 distance speed
-  edcmotors_moveMotorDistanceSpeed 2 (-1 * distance) speed
-}
-
-to xrp_driveLeftRightSpeed leftSpeed rightSpeed durationMillis {
-  comment 'Drive the wheels at the specified speed (encoder counts/sec) for the specified duration (milliseconds; 0=forever)'
-  edcmotors_moveMotorSpeed 1 leftSpeed durationMillis
-  edcmotors_moveMotorSpeed 2 (-1 * rightSpeed) durationMillis
-}
-
-to 'xrp_readDistanceSensor' {
-  comment 'Return the distance (cm) read by the HC-SR04 distance sensor.'
-  return ('distance (cm)' 20 21)
-}
-
-to xrp_readLineSensors {
-  return ('[data:makeList]' (analogReadOp 26) (analogReadOp 27))
-}
-
-to xrp_readRollPitchYaw {
-    comment 'Read roll, pitch, and yaw (deg/sec) from the gyroscope'
-    if (_xrp__imuAddress == 0) {
-      _xrp_initGyroscope
-    }
-    return ('[data:makeList]' (
-      _xrp_scaleRollPitchOrYaw (i2cGet _xrp__imuAddress 37)) (
-      _xrp_scaleRollPitchOrYaw (i2cGet _xrp__imuAddress 35)) (
-      -1 * (_xrp_scaleRollPitchOrYaw (i2cGet _xrp__imuAddress 39)))
-    )
-}
-
-to xrp_readYaw {
-    comment 'Read yaw (deg/sec) from the gyroscope'
-    if (_xrp__imuAddress == 0) {
-      _xrp_initGyroscope
-    }
-    return (-1 * (_xrp_scaleRollPitchOrYaw (i2cGet _xrp__imuAddress 39)))
-}
-
-to xrp_setServo index angle {
-  _edcmotors_checkSystem
-  if (index == 1) {
-    setServoAngle 16 angle
-  } (index == 2) {
-    setServoAngle 17 angle
-  } else {
-    sayIt 'Invalid servo index; must be 1 or 2'
-  }
-}
-
-to xrp_turnAngle angle speed {
-  comment 'Turn the robot by the specified angle (degrees),
-    moving the wheel at the specified speed (encoder counts/second).
-    Rotate about a point halfway between the wheels.'
-  edcmotors_moveMotorDistanceSpeed 1 ((41978 * angle) / 10000) speed
-  edcmotors_moveMotorDistanceSpeed 2 ((41978 * angle) / 10000) speed
 }
 
 to _xrp_scaleRollPitchOrYaw speed {
