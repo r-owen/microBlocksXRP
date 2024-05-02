@@ -88,12 +88,6 @@ The main `Encoded DC Motors` blocks:
 
 - `edcmotors_moveMotorAtSpeed`: move the specified motor at the specified speed (encoder counts/second)
   for the specified duration (milliseconds, 0=forever).
-  Warning: if you want to wait for a set of motors to stop moving then do the following:
-  - Call `edcmotors_moveMotorAtSpeed` for each motor you want to run.
-  - Call `edcmotors_waitForMotorsToStart` for all the motors you have started.
-  - Call `edcmotors_waitForMotorsToStop` for those same motors.
-  If you forget to call `edcmotors_waitForMotorsToStart` then `edcmotors_waitForMotorsToStop` will probably exit immediately,
-  because it takes some time for the move to actually start.
 - `edcmotors_stopAllMotors`: stop all motors.
 - `edcmotors_stopMotors`: stop the specified motors.
 - `edcmotors_waitForMotorsToSart`: wait for the specified motors to start moving.
