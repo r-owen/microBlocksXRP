@@ -1,12 +1,12 @@
 module 'XRP'
 author 'Russell Owen'
-version 0 5
+version 0 6
 description 'Drive the WPI XRP robot'
 depends 'Encoded DC Motors' Servo 'Distance (HC-SR04)'
 variables _xrp__imuAddress
 
   spec ' ' 'xrp_driveDistance' 'drive distance _ (mm) speed _ (mm/sec)' 'num num' 100 300
-  spec ' ' 'xrp_driveAtSpeed' 'drive at speed left _ right _ (mm/sec) for _ millisec (0=forever)' 'num num num' 1000 1000 2000
+  spec ' ' 'xrp_driveAtSpeed' 'drive at speed left _ right _ (mm/sec) for _ millisec (0=forever)' 'num num num' 300 300 1000
   spec 'r' 'xrp_readRollRate' 'read roll rate (deg/sec)'
   spec 'r' 'xrp_readPitchRate' 'read pitch rate (deg/sec)'
   spec 'r' 'xrp_readYawRate' 'read yaw rate (deg/sec)'
@@ -30,19 +30,17 @@ to xrp_driveDistance distance speed {
     sayIt 'Speed must be nonzero'
     return
   }
+  local durationMillis ((distance * 1000) / speed)
   local distanceCounts (xrp_mmToCounts distance)
   local speedCounts (xrp_mmToCounts speed)
-  local durationMillis (distanceCounts * 1000 / speedCounts)
   edcmotors_moveMotorAtSpeed 1 speedCounts durationMillis
   edcmotors_moveMotorAtSpeed 2 (-1 * speedCounts) durationMillis
-  edcmotors_waitForMotorsToStart 1 2
 }
 
 to xrp_driveAtSpeed leftSpeed rightSpeed durationMillis {
   comment 'Drive the wheels at the specified speed (mm/sec) for the specified duration (milliseconds; 0=forever)'
   edcmotors_moveMotorAtSpeed 1 (xrp_mmToCounts leftSpeed) durationMillis
   edcmotors_moveMotorAtSpeed 2 (-1 * (xrp_mmToCounts rightSpeed)) durationMillis
-  edcmotors_waitForMotorsToStart 1 2
 }
 
 to xrp_readRollRate {
@@ -98,7 +96,6 @@ Rotate about a point halfway between the wheels.'
   local 'durationMillis' (absoluteValue ((distanceCounts * 1000) / speedCounts))
   edcmotors_moveMotorAtSpeed 1 speedCounts durationMillis
   edcmotors_moveMotorAtSpeed 2 speedCounts durationMillis
-  edcmotors_waitForMotorsToStart 1 2
 }
 
 to xrp_waitForWheelsToStop {
