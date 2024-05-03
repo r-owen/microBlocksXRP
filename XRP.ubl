@@ -30,9 +30,8 @@ to xrp_driveDistance distance speed {
     sayIt 'Speed must be nonzero'
     return
   }
-  local durationMillis ((distance * 1000) / speed)
-  local distanceCounts (xrp_mmToCounts distance)
-  local speedCounts (xrp_mmToCounts speed)
+  local durationMillis (absoluteValue ((distance * 1000) / speed))
+  local speedCounts (pid_applySign distance (xrp_mmToCounts speed))
   edcmotors_moveMotorAtSpeed 1 speedCounts durationMillis
   edcmotors_moveMotorAtSpeed 2 (-1 * speedCounts) durationMillis
 }
