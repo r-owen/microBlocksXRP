@@ -1,6 +1,6 @@
 module 'XRP'
 author 'Russell Owen'
-version 0 6
+version 0 7
 description 'Drive the WPI XRP robot'
 depends 'Encoded DC Motors' Servo 'Distance (HC-SR04)'
 variables _xrp__imuAddress
@@ -128,7 +128,7 @@ to '_edcmotors_checkSystem' {
 to '_edcmotors_initSystemVariables' {
   comment 'Set system-specific motors variables.
     Assume that _init_edcmotors_variables has been called, so that all lists exist.'
-  if ((_edcmotors__numMotors < 2) or (_edcmotors__numMotors > 4)) {
+  if (or (_edcmotors__numMotors < 2) (_edcmotors__numMotors > 4)) {
     sayIt 'Number of motors must be 2-4'
     return
   }

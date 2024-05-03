@@ -1,6 +1,6 @@
 module 'PID'
 author 'Russell Owen'
-version 0 5
+version 0 7
 description 'PID Control Loop'
 variables _pid__initialized _pid__numPIDs _pid__prevError _pid__prevMicros _pid__prevIntegral 
 
@@ -84,7 +84,7 @@ to pid_applySign sign value {
 
 
 to _pid_extendPIDLists index {
-  comment 'Extend PID's global list variables, if needed,
+  comment 'Extend PID''s global list variables, if needed,
 so that they are large enough to use the specified index.'
   _pid_initLibrary
   repeatUntil ((size _pid__prevError) >= index) {
