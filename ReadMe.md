@@ -90,10 +90,9 @@ The main `Encoded DC Motors` blocks:
   for the specified duration (milliseconds, 0=forever).
 - `edcmotors_stopAllMotors`: stop all motors.
 - `edcmotors_stopMotors`: stop the specified motors.
-- `edcmotors_waitForMotorsToSart`: wait for the specified motors to start moving.
-  This can take about 10 ms after calling `edcmotors_moveMotorAtSpeed`,
-  because it takes time for `edcmotors_waitForMotorsToStop` to start the move.
 - `edcmotors_waitForMotorsToStop`: wait for the specified motors to stop.
+  This uses the predicted end time of the current move,
+  rather than actually waiting for the wheels to stop, so it may exit early.
 
 Background tasks which the user should not have to touch.
 Note that each of this is an infinite loops, so if you do decide to run them manually,
@@ -125,24 +124,21 @@ Some useful XRP facts from
 
 The main `XRP` blocks:
 
-- `xrp_driveDistance`: drive straight for the specified distance (mm)
-    at the specified speed (mm/second). Specify a negative distance to
-    go backwards.
-- `xrp_driveLeftRightSpeed`: drive at the specified speed (mm/second)
-    for a specified duration (milliseconds). The speed can be different
-    for the left and right wheels, so you can travel in an arc.
-- `xrp_readRollRate`: read roll rate (degrees/second). Positive roll
-    tilts the left edge up.
-- `xrp_readPitchRate`: read pitch rate (degrees/second). Positive
-    pitch tilts the nose up.
-- `xrp_readYawRate`: \'read yaw rate (degrees/second). Positive yaw
-    changes the heading to the right.
+- `xrp_driveDistance`: drive straight for the specified distance (mm) at the specified speed (mm/second).
+    Specify a negative distance to go backwards.
+- `xrp_driveLeftRightSpeed`: drive at the specified speed (mm/second) for a specified duration (milliseconds).
+  The speed can be different for the left and right wheels, so you can travel in an arc.
+- `xrp_readRollRate`: read roll rate (degrees/second).
+  Positive roll tilts the left edge up.
+- `xrp_readPitchRate`: read pitch rate (degrees/second).
+  Positive pitch tilts the nose up.
+- `xrp_readYawRate`: \'read yaw rate (degrees/second).
+  Positive yaw changes the heading to the right.
 - `xrp_readDistanceSensor`: read the distance sensor (mm)
 - `xrp_readLineSensors`: read the line sensors L,R (raw)
-- `xrp_setServo`: set the specified servo to the specified angles
-    (degrees)
-- `xrp_turnAngle`: change the heading by the specified amount
-    (degrees)
-- `xrp_waitForWheelsToStop`: wait for both wheels to stop. This uses
-    the predicted end time of the current move, rather than actually
-    waiting for the wheels to stop, so it may exit a bit early.
+- `xrp_setServo`: set the specified servo to the specified angles (degrees)
+- `xrp_stopWheels`: stop both wheels.
+- `xrp_turnAngle`: change the heading by the specified amount (degrees)
+- `xrp_waitForWheelsToStop`: wait for both wheels to stop.
+  This uses the predicted end time of the current move,
+  rather than actually waiting for the wheels to stop, so it may exit early.
