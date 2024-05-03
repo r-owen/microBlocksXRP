@@ -5,7 +5,7 @@ depends PID
 description 'Drive DC motors with encoders'
 variables edcmotors__encoderPosition _edcmotors__initialized _edcmotors__running _edcmotors__numMotors _edcmotors__maxSpeed _edcmotors__pinDutyCycle _edcmotors__pinEncoderA _edcmotors__pinEncoderB _edcmotors__pinDirection _edcmotors__prevEncoderAState _edcmotors__prevEncoderBState _edcmotors__targetStartPosition _edcmotors__targetSpeed _edcmotors__targetStartMillis _edcmotors__targetDurationMillis _edcmotors__pCoeff _edcmotors__iCoeff _edcmotors__dCoeff _edcmotors__deadband _edcmotors__minEffort _edcmotors__maxEffort _edcmotors__maxIntegral 
 
-  spec ' ' 'edcmotors_moveMotorAtSpeed' 'move motor _ at speed _ (encoder counts/sec) for _ milliseconds (0=forever)' 'num num num' 1 1000 2
+  spec ' ' 'edcmotors_moveMotorAtSpeed' 'move motor _ at speed _ (encoder counts/sec) for _ milliseconds (0=forever)' 'num num num' 1 1000 100
   spec ' ' 'edcmotors_moveMotorWithEffort' 'move motor _ with effort _ (-1023 to 1023)' 'num num' 1 250
   spec ' ' 'edcmotors_resetMotorEncoder' 'reset motor encoder index _' 'num' 1
   spec ' ' 'edcmotors_stopAllMotors' 'stop all motors'
@@ -65,13 +65,11 @@ in order for edcmotors_moveMotorAtSpeed to work.'
         comment 'Check that following is still wanted, just before commanding the motor.'
         if ((at i _edcmotors__targetStartMillis) >= 0) {
           '_edcmotors_basicMoveMotorsWithEffort' i effort
-        } else {
-          running = (booleanConstant false)
-        }
-        if running {
-          _edcmotors__running = (_edcmotors__running | (1 << (i - 1)))
-        } else {
-          _edcmotors__running = (_edcmotors__running & ('~' (1 << (i - 1))))
+          if running {
+            _edcmotors__running = (_edcmotors__running | (1 << (i - 1)))
+          } else {
+            _edcmotors__running = (_edcmotors__running & ('~' (1 << (i - 1))))
+          }
         }
       }
     }
@@ -211,6 +209,9 @@ Warning:  geared motors have enough friction that they may not reliably move at 
 For example the XRP wheels may not reliably move if the absolute value of effort is less than about 200.
 Thus the usable range of effort is usually rather small.'
   '_edcmotors_initLibrary'
+  comment 'Prevent _edcmotors_driveMotorsToFollowTarget from moving the motor'
+  atPut index _edcmotors__targetStartMillis -1
+  _edcmotors__running = (_edcmotors__running | (1 << (index - 1)))
   '_edcmotors_basicMoveMotorsWithEffort' index effort
 }
 
