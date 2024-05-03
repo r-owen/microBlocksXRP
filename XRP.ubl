@@ -13,6 +13,7 @@ variables _xrp__imuAddress
   spec 'r' 'xrp_readDistanceSensor' 'read distance sensor (cm)'
   spec 'r' 'xrp_readLineSensors' 'read left, right line sensors'
   spec ' ' 'xrp_setServo' 'set servo _ to angle _ (deg)' 'num num' 1 0
+  spec ' ' 'xrp_stopWheels' 'stop both wheels'
   spec ' ' 'xrp_turnAngle' 'turn angle _ (deg) at motor speed _ (mm/sec)' 'num num' 90 300
   spec ' ' 'xrp_waitForWheelsToStop' 'wait for wheels to stop'
   space
@@ -168,6 +169,11 @@ to xrp_setServo index angle {
   } else {
     sayIt 'Invalid servo index; must be 1 or 2'
   }
+}
+
+to xrp_stopWheels {
+  comment 'Stop both wheels'
+  edcmotors_stopMotors 1 2
 }
 
 to xrp_turnAngle angle speed {
