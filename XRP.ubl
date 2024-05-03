@@ -115,6 +115,10 @@ to xrp_driveDistance distance speed {
     sayIt 'Speed must be nonzero'
     return
   }
+  if (distance == 0) {
+    comment 'Prevent inifinite motion due to duration=0'
+    return
+  }
   local 'durationMillis' (absoluteValue ((distance * 1000) / speed))
   local 'speedCounts' (pid_applySign distance (xrp_mmToCounts speed))
   edcmotors_moveMotorAtSpeed 1 speedCounts durationMillis
@@ -180,6 +184,10 @@ to xrp_turnAngle angle speed {
   comment 'Turn the robot by the specified angle (degrees),
 moving the wheel at the specified speed (mm/second).
 Rotate about a point halfway between the wheels.'
+  if (angle == 0) {
+    comment 'Prevent inifinite motion due to duration=0'
+    return
+  }
   local 'speedCounts' (pid_applySign angle (xrp_mmToCounts speed))
   local 'distanceCounts' ((41978 * angle) / 10000)
   local 'durationMillis' (absoluteValue ((distanceCounts * 1000) / speedCounts))
