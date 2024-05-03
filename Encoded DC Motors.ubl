@@ -184,6 +184,10 @@ to '_edcmotors_stopOneMotor' index {
 to edcmotors_moveMotorAtSpeed index speed durationMillis {
   comment 'Move the specified motor at the specified speed (counts/sec) for the specified duration (milliseconds; 0=forever).'
   '_edcmotors_initLibrary'
+  if (durationMillis < 0) {
+    sayIt 'durationMillis=' durationMillis 'must be >= 0'
+    return
+  }
   comment 'Constrain the speed to a sane value.
 This reduces the risk that the robot will keep going long after the move should have finished.'
   if ((absoluteValue speed) > _edcmotors__maxSpeed) {
