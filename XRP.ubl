@@ -1,12 +1,13 @@
-module XRP
+module XRP Output
 author 'Russell Owen'
-version 0 8 
+version 0 9 
 depends 'Encoded DC Motors' Servo 'Distance (HC-SR04)' 
 description 'Drive the WPI XRP robot'
 variables _xrp__imuAddress 
 
   spec ' ' 'xrp_driveDistance' 'drive distance _ (mm) speed _ (mm/sec)' 'num num' 100 300
-  spec ' ' 'xrp_driveAtSpeed' 'drive at speed left _ right _ (mm/sec) for _ millisec (0=forever)' 'num num num' 300 300 1000
+  spec ' ' 'xrp_driveAtSpeed' 'drive at speed left _ right _ (mm/sec)' 'num num' 300 300
+  spec ' ' 'xrp_driveAtSpeedForDuration' 'drive at speed left _ right _ (mm/sec) for _ milliseconds' 'num num num' 300 300 1000
   spec ' ' 'xrp_stopWheels' 'stop both wheels'
   spec ' ' 'xrp_turnAngle' 'turn angle _ (deg) at motor speed _ (mm/sec)' 'num num' 90 300
   spec ' ' 'xrp_waitForWheelsToStop' 'wait for wheels to stop'
@@ -42,15 +43,18 @@ Assume that _init_edcmotors_variables has been called, so that all lists exist.'
     sayIt 'Number of motors must be 2-4'
     return
   }
-  _edcmotors__pCoeff = 2000
-  _edcmotors__iCoeff = 0
-  _edcmotors__dCoeff = 0
-  _edcmotors__deadband = 10
-  _edcmotors__minEffort = 300
-  _edcmotors__maxEffort = 1023
-  _edcmotors__maxIntegral = 10
+  comment 'If you are controlling more than the standard 2 wheel motors,
+you may want to tweak the following lines to specify different tuning parameters for the extra motors,
+especially if the extra motors are not the same as the wheel motors.'
+  atPut 'all' _edcmotors__pCoeff 2000
+  atPut 'all' _edcmotors__iCoeff 0
+  atPut 'all' _edcmotors__dCoeff 0
+  atPut 'all' _edcmotors__deadband 10
+  atPut 'all' _edcmotors__minEffort 300
+  atPut 'all' _edcmotors__maxEffort 1023
+  atPut 'all' _edcmotors__maxIntegral 10
   comment 'Approximate maximum motor speed (encoder counts/second) with no load'
-  _edcmotors__maxSpeed = 1080
+  atPut 'all' _edcmotors__maxSpeed 1080
   atPut 1 _edcmotors__pinEncoderA 4
   atPut 1 _edcmotors__pinEncoderB 5
   atPut 1 _edcmotors__pinDirection 6
@@ -105,8 +109,14 @@ override this method to return how many you are using. Never return less than 2.
   return 2
 }
 
-to xrp_driveAtSpeed leftSpeed rightSpeed durationMillis {
-  comment 'Drive the wheels at the specified speed (mm/sec) for the specified duration (milliseconds; 0=forever)'
+to xrp_driveAtSpeed leftSpeed rightSpeed {
+  comment 'Drive the wheels at the specified speed (mm/sec) for nearly forever'
+  edcmotors_moveMotorAtSpeed 1 (xrp_mmToCounts leftSpeed)
+  edcmotors_moveMotorAtSpeed 2 (0 - (xrp_mmToCounts rightSpeed))
+}
+
+to xrp_driveAtSpeedForDuration leftSpeed rightSpeed durationMillis {
+  comment 'Drive the wheels at the specified speed (mm/sec) for the specified duration (milliseconds)'
   edcmotors_moveMotorAtSpeedForDuration 1 (xrp_mmToCounts leftSpeed) durationMillis
   edcmotors_moveMotorAtSpeedForDuration 2 (0 - (xrp_mmToCounts rightSpeed)) durationMillis
 }
