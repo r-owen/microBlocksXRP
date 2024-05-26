@@ -5,9 +5,8 @@ depends 'Encoded DC Motors' Servo 'Distance (HC-SR04)'
 description 'Drive the WPI XRP robot'
 variables _xrp__imuAddress 
 
-  spec ' ' 'xrp_driveDistance' 'drive distance _ (mm) speed _ (mm/sec)' 'num num' 100 300
   spec ' ' 'xrp_driveAtSpeed' 'drive at speed left _ right _ (mm/sec)' 'num num' 300 300
-  spec ' ' 'xrp_driveAtSpeedForDuration' 'drive at speed left _ right _ (mm/sec) for _ milliseconds' 'num num num' 300 300 1000
+  spec ' ' 'xrp_driveDistance' 'drive distance _ (mm) speed _ (mm/sec)' 'num num' 100 300
   spec ' ' 'xrp_stopWheels' 'stop both wheels'
   spec ' ' 'xrp_turnAngle' 'turn angle _ (deg) at motor speed _ (mm/sec)' 'num num' 90 300
   spec ' ' 'xrp_waitForWheelsToStop' 'wait for wheels to stop'
@@ -53,7 +52,7 @@ especially if the extra motors are not the same as the wheel motors.'
   atPut 'all' _edcmotors__minEffort 300
   atPut 'all' _edcmotors__maxEffort 1023
   atPut 'all' _edcmotors__maxIntegral 10
-  comment 'Approximate maximum motor speed (encoder counts/second) with no load'
+  comment 'Approximate maximum motor speed (encoder counts/second) with no load.'
   atPut 'all' _edcmotors__maxSpeed 1080
   atPut 1 _edcmotors__pinEncoderA 4
   atPut 1 _edcmotors__pinEncoderB 5
@@ -110,27 +109,17 @@ override this method to return how many you are using. Never return less than 2.
 }
 
 to xrp_driveAtSpeed leftSpeed rightSpeed {
-  comment 'Drive the wheels at the specified speed (mm/sec) for nearly forever'
+  comment 'Drive the wheels at the specified speed (mm/sec)'
   edcmotors_moveMotorAtSpeed 1 (xrp_mmToCounts leftSpeed)
   edcmotors_moveMotorAtSpeed 2 (0 - (xrp_mmToCounts rightSpeed))
 }
 
-to xrp_driveAtSpeedForDuration leftSpeed rightSpeed durationMillis {
-  comment 'Drive the wheels at the specified speed (mm/sec) for the specified duration (milliseconds)'
-  edcmotors_moveMotorAtSpeedForDuration 1 (xrp_mmToCounts leftSpeed) durationMillis
-  edcmotors_moveMotorAtSpeedForDuration 2 (0 - (xrp_mmToCounts rightSpeed)) durationMillis
-}
-
 to xrp_driveDistance distance speed {
   comment 'Drive the wheels the specified distance (mm) at the specified speed (mm/second)'
-  if (speed == 0) {
-    sayIt 'Speed must be nonzero'
-    return
-  }
-  local 'durationMillis' (absoluteValue ((distance * 1000) / speed))
-  local 'speedCounts' (pid_applySign distance (xrp_mmToCounts speed))
-  edcmotors_moveMotorAtSpeedForDuration 1 speedCounts durationMillis
-  edcmotors_moveMotorAtSpeedForDuration 2 (0 - speedCounts) durationMillis
+  local 'distanceCounts' (xrp_mmToCounts distance)
+  local 'speedCounts' (xrp_mmToCounts speed)
+  edcmotors_moveMotorDistance 1 distanceCounts speedCounts
+  edcmotors_moveMotorDistance 2 (0 - distanceCounts) speedCounts
 }
 
 to xrp_mmToCounts mm {
@@ -194,9 +183,8 @@ moving the wheel at the specified speed (mm/second).
 Rotate about a point halfway between the wheels.'
   local 'speedCounts' (pid_applySign angle (xrp_mmToCounts speed))
   local 'distanceCounts' ((41978 * angle) / 10000)
-  local 'durationMillis' (absoluteValue ((distanceCounts * 1000) / speedCounts))
-  edcmotors_moveMotorAtSpeedForDuration 1 speedCounts durationMillis
-  edcmotors_moveMotorAtSpeedForDuration 2 speedCounts durationMillis
+  edcmotors_moveMotorDistance 1 distanceCounts speedCounts
+  edcmotors_moveMotorDistance 2 distanceCounts speedCounts
 }
 
 to xrp_waitForWheelsToStop {
