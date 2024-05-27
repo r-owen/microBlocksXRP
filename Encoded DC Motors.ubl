@@ -17,6 +17,7 @@ variables edcmotors__encoderPosition _edcmotors__initialized _edcmotors__running
   spec ' ' '_edcmotors_driveMotorsToFollowTarget' '_drive motors to follow target'
   spec 'r' '_edcmotors_getTargetPositionSpeedRunning' '_get target position and speed for motor _ at time _ (msec, -1 for now)' 'num num' 1 -1
   spec 'r' '_edcmotors_addTime' '_add time _ duration _' 'num num' 0 0
+  spec 'r' '_edcmotors_constrainSpeed' '_constrain speed for index _ desired speed _ (encoder counts/sec)' 'num num' 1 500
   spec ' ' '_edcmotors_initLibrary' '_edcmotors init library'
   spec ' ' '_edcmotors_initVariables' '_edcmotors init variables'
   spec ' ' '_edcmotors_monitorEncoders' '_monitor motor encoders'
@@ -142,6 +143,16 @@ Assumes that _edcmotors_initLibrary has been called.'
   }
 }
 
+to '_edcmotors_constrainSpeed' index speed {
+  comment 'Constrain speed (encoder counts/second) for the specified motor to a sane value:
+80% of the unloaded max speed. This should prevent motion that takes far longer than expected.'
+  local 'maxRequestedSpeed' ((800 * (at index _edcmotors__maxSpeed)) / 1000)
+  if ((absoluteValue speed) > maxRequestedSpeed) {
+    speed = (pid_applySign speed maxRequestedSpeed)
+  }
+  return speed
+}
+
 to '_edcmotors_initLibrary' {
   comment 'Initialize the DC Motors library.
 Check motor power and initialize variables (if not already initialized).
@@ -225,12 +236,7 @@ to '_edcmotors_stopOneMotor' index {
 to edcmotors_moveMotorAtSpeed index speed {
   comment 'Move the specified motor at the specified speed (counts/sec)'
   '_edcmotors_initLibrary'
-  comment 'Constrain the speed to a sane value: 80% of the unloaded max speed.
-This makes it far more likely that the robot can actually obey the requested speed.'
-  local 'maxRequestedSpeed' ((800 * (at index _edcmotors__maxSpeed)) / 1000)
-  if ((absoluteValue speed) > maxRequestedSpeed) {
-    speed = (pid_applySign speed maxRequestedSpeed)
-  }
+  speed =  (_edcmotors_constrainSpeed index speed)
   atPut index _edcmotors__targetStartMillis -1
   edcmotors_resetMotorEncoders index
   atPut index _edcmotors__targetList ('[data:makeList]' ('[data:makeList]' 0 0 speed 0))
@@ -245,8 +251,7 @@ to edcmotors_moveMotorDistance index distance speed {
     sayIt 'speed=' speed 'must be non-zero'
     return
   }
-  comment 'Constrain the speed to a sane value: 80% of the unloaded max speed.
-This makes it far more likely that the robot can actually obey the requested speed.'
+  speed = (_edcmotors_constrainSpeed index speed)
   local 'maxRequestedSpeed' ((800 * (at index _edcmotors__maxSpeed)) / 1000)
   if ((absoluteValue speed) > maxRequestedSpeed) {
     speed = (pid_applySign speed maxRequestedSpeed)
