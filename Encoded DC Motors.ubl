@@ -79,7 +79,7 @@ in order to make the system more stable at the start and end of each move.'
 
 to '_edcmotors_getTargetPositionSpeedRunning' index atMillis {
   comment 'Compute the target position for the specified motor at the specified time (msec, <0 for now).
-Return a list with four elements:
+Return a list with three elements:
 * target position (encoder counts)
 * target speed (encoder counts/second)
 * running
@@ -89,8 +89,8 @@ Assumes that _edcmotors_initLibrary has been called.'
   }
   local 'targetStartMillis' (at index _edcmotors__targetStartMillis)
   if (targetStartMillis < 0) {
-    sayIt 'Warning: no target; returning 0, 0'
-    return ('[data:makeList]' 0 0 0 (booleanConstant false))
+    comment 'No target'
+    return ('[data:makeList]' 0 0 (booleanConstant false))
   }
   local 'durationMillis' (millisSince targetStartMillis atMillis)
   local 'targetDurationMillis' (at index _edcmotors__targetDurationMillis)
