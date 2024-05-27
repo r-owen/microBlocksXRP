@@ -29,10 +29,14 @@ variables _xrp__imuAddress
 
 to '_edcmotors_checkSystem' {
   comment 'Check drive power to the XRP board.'
+  local 'clearText' (booleanConstant false)
   repeatUntil ((analogReadOp 28) >= 300) {
     sayIt 'Insufficient drive voltage; check the power switch and batteries.'
+    clearText = (booleanConstant true)
   }
-  sayIt ''
+  if clearText {
+    sayIt ''
+  }
 }
 
 to '_edcmotors_initSystemVariables' {
@@ -53,7 +57,7 @@ especially if the extra motors are not the same as the wheel motors.'
   atPut 'all' _edcmotors__maxEffort 1023
   atPut 'all' _edcmotors__maxIntegral 10
   comment 'Approximate maximum motor speed (encoder counts/second) with no load.'
-  atPut 'all' _edcmotors__maxSpeed 1080
+  atPut 'all' _edcmotors__maxSpeed 1800
   atPut 1 _edcmotors__pinEncoderA 4
   atPut 1 _edcmotors__pinEncoderB 5
   atPut 1 _edcmotors__pinDirection 6
