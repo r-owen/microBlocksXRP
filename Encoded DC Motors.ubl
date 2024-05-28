@@ -175,12 +175,9 @@ Assumes that _edcmotors_initLibrary has been called.'
   local 'speed' 0
   forever {
     comment 'Check list length and start time every time through the loop since another task may have changed while the loop starts over.'
-    if ((size targetList) == 0) {
-      comment 'No trajectory'
-      return ('[data:makeList]' 0 0 (booleanConstant false))
-    }
     startTimeMillis = (at index _edcmotors__targetStartMillis)
-    if (startTimeMillis < 0) {
+    if (or ((size targetList) == 0) (startTimeMillis < 0)) {
+      comment 'No path'
       return ('[data:makeList]' 0 0 (booleanConstant false))
     }
     durationMillis = (millisSince startTimeMillis atMillis)
