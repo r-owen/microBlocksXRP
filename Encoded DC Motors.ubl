@@ -19,7 +19,7 @@ variables edcmotors__encoderPosition _edcmotors__initialized _edcmotors__running
   spec 'r' '_edcmotors_computePointToPointTargetList' '_compute a target list for a move of distance _ (encoder counts) max speed _ (counts/sec) accel _ (counts/sec^2)' 'num num num' 2000 1000 100
   spec 'r' '_edcmotors_computeShortPointToPointTargetList' '_compute a target list for a short move of distance _ (encoder counts) accel _ (counts/sec^2)' 'num num' 100 100
   spec ' ' '_edcmotors_driveMotorsToFollowTarget' '_drive motors to follow target'
-  spec 'r' '_edcmotors_getTargetPositionSpeedRunning' '_get target position and speed for motor _ at time _ (msec, -1 for now)' 'num num' 1 -1
+  spec 'r' '_edcmotors_getTargetPositionSpeedRunning' '_get target position and speed for motor _ at time _ (msec)' 'num num' 1 -1
   spec 'r' '_edcmotors_addTime' '_add time _ duration _' 'num num' 0 0
   spec 'r' '_edcmotors_constrainSpeed' '_constrain speed for index _ desired speed _ (encoder counts/sec)' 'num num' 1 500
   spec ' ' '_edcmotors_initLibrary' '_edcmotors init library'
@@ -76,11 +76,7 @@ Return an empty list if there is a problem.'
     comment 'Move is too short to reach max speed'
     return ('_edcmotors_computeShortPointToPointTargetList' distance accel)
   }
-  local 'accel1' (pid_applySign distance accel)
-  local 'position2' (pid_applySign distance distanceAccel)
-  local 'speed2' (pid_applySign distance maxSpeed)
-  local 'position3' (position2 + (pid_applySign distance distanceAtSpeed))
-  return ('[data:makeList]' ('[data:makeList]' durationMillisAccel 0 0 accel1) ('[data:makeList]' durationMillisAtSpeed position2 speed2 0) ('[data:makeList]' durationMillisAccel position3 speed2 (0 - accel1)) ('[data:makeList]' -1 distance 0 0))
+  return ('[data:makeList]' ('[data:makeList]' durationMillisAccel 0 0 (pid_applySign distance accel)) ('[data:makeList]' durationMillisAtSpeed (pid_applySign distance distanceAccel) (pid_applySign distance maxSpeed) 0) ('[data:makeList]' durationMillisAccel ((pid_applySign distance distanceAccel) + (pid_applySign distance distanceAtSpeed)) (pid_applySign distance maxSpeed) (0 - (pid_applySign distance accel))) ('[data:makeList]' -1 distance 0 0))
 }
 
 to '_edcmotors_computeShortPointToPointTargetList' distance accel {
@@ -92,10 +88,8 @@ the max length limit for blocks'
     comment 'Move is too short to compute segments'
     return ('[data:makeList]' ('[data:makeList]' -1 distance 0 0))
   }
-  local 'accel1' (pid_applySign distance accel)
   local 'speed2' (pid_applySign distance ((accel * durationMillisAccel) / 1000))
-  local 'position2' (distance / 2)
-  return ('[data:makeList]' ('[data:makeList]' durationMillisAccel 0 0 accel1) ('[data:makeList]' durationMillisAccel position2 speed2 (0 - accel1)) ('[data:makeList]' -1 distance 0 0))
+  return ('[data:makeList]' ('[data:makeList]' durationMillisAccel 0 0 (pid_applySign distance accel)) ('[data:makeList]' durationMillisAccel (distance / 2) speed2 (0 - (pid_applySign distance accel))) ('[data:makeList]' -1 distance 0 0))
 }
 
 to '_edcmotors_constrainSpeed' index speed {
@@ -116,27 +110,19 @@ in order for edcmotors_moveMotorAtSpeed and edcmotors_moveMotorDistance to work.
     pid_resetPID index
   }
   '_edcmotors_initLibrary'
-  local 'targetPositionAndSpeed' 0
-  local 'targetPosition' 0
-  local 'targetSpeed' 0
-  local 'encoderPosition' 0
+  local 'targetPositionSpeedRunning' 0
   local 'positionError' 0
   local 'correction' 0
   local 'effort' 0
-  local 'running' (booleanConstant false)
   forever {
     for index _edcmotors__numMotors {
       if ((at index _edcmotors__targetStartMillis) >= 0) {
-        targetPositionAndSpeed = ('_edcmotors_getTargetPositionSpeedRunning' index -1)
-        targetPosition = (at 1 targetPositionAndSpeed)
-        targetSpeed = (at 2 targetPositionAndSpeed)
-        running = (at 3 targetPositionAndSpeed)
-        encoderPosition = (at index edcmotors__encoderPosition)
+        targetPositionSpeedRunning = ('_edcmotors_getTargetPositionSpeedRunning' index (millisOp))
         comment 'Note: simple subtraction handles encoder wraparound automatically'
-        positionError = (targetPosition - encoderPosition)
+        positionError = ((at 1 targetPositionSpeedRunning) - (at index edcmotors__encoderPosition))
         correction = (pid_computePID index positionError (at index _edcmotors__pCoeff) (at index _edcmotors__iCoeff) (at index _edcmotors__dCoeff) (at index _edcmotors__maxIntegral))
         comment 'Compute predicted ("feed forward") effort.'
-        effort = ((targetSpeed * (at index _edcmotors__maxEffort)) / (at index _edcmotors__maxSpeed))
+        effort = (((at 2 targetPositionSpeedRunning) * (at index _edcmotors__maxEffort)) / (at index _edcmotors__maxSpeed))
         comment 'If the predicted effort is too small to be useful, set it to 0,
 in order to make the system more stable at the start and end of each move.'
         if ((absoluteValue effort) < (at index _edcmotors__maxEffort)) {
@@ -147,7 +133,7 @@ in order to make the system more stable at the start and end of each move.'
         comment 'Check that following is still wanted, just before commanding the motor.'
         if ((at index _edcmotors__targetStartMillis) >= 0) {
           '_edcmotors_basicMoveMotorWithEffort' index effort
-          if running {
+          if (at 3 targetPositionSpeedRunning) {
             _edcmotors__running = (_edcmotors__running | (1 << (index - 1)))
           } else {
             _edcmotors__running = (_edcmotors__running & ('~' (1 << (index - 1))))
@@ -181,7 +167,7 @@ Assumes that _edcmotors_initLibrary has been called.'
   forever {
     comment 'Check list length and start time every time through the loop since another task may have changed while the loop starts over.'
     startTimeMillis = (at index _edcmotors__targetStartMillis)
-    if (or ((size targetList) == 0) (startTimeMillis < 0)) {
+    if (or (size targetList) == 0) (startTimeMillis < 0)) {
       comment 'No path'
       return ('[data:makeList]' 0 0 (booleanConstant false))
     }
@@ -204,11 +190,12 @@ Assumes that _edcmotors_initLibrary has been called.'
       return ('[data:makeList]' position speed (booleanConstant true))
     } else {
       comment 'This segment has expired; discard it and try the next (if any)'
-      startTimeMillis = ('_edcmotors_addTime' startTimeMillis segmentDurationMillis)
+      atPut index _edcmotors__targetStartMillis ('_edcmotors_addTime' (at index _edcmotors__targetStartMillis) segmentDurationMillis)
       '[data:delete]' 1 targetList
     }
   }
 }
+
 
 to '_edcmotors_initLibrary' {
   comment 'Initialize the DC Motors library.
