@@ -5,13 +5,15 @@ depends PID
 description 'Drive DC motors with encoders'
 variables edcmotors__encoderPosition _edcmotors__initialized _edcmotors__running _edcmotors__numMotors _edcmotors__maxSpeed _edcmotors__accel _edcmotors__pinDutyCycle _edcmotors__pinEncoderA _edcmotors__pinEncoderB _edcmotors__pinDirection _edcmotors__prevEncoderAState _edcmotors__prevEncoderBState _edcmotors__targetStartMillis _edcmotors__targetList _edcmotors__pCoeff _edcmotors__iCoeff _edcmotors__dCoeff _edcmotors__deadband _edcmotors__minEffort _edcmotors__maxEffort _edcmotors__maxIntegral 
 
-  spec ' ' 'edcmotors_moveMotorAtSpeed' 'move motor _ at speed _ (encoder counts/sec)' 'num num' 1 500
-  spec ' ' 'edcmotors_moveMotorDistance' 'move motor _ distance _ (encoder counts) at max speed _ (counts/sec)' 'num num num' 1 100 500
+  spec ' ' 'edcmotors_moveMotorAtSpeed' 'move motor _ at speed _ (encoder counts/sec) with start time _ (millis or ''now'')' 'num num auto' 1 500 'now'
+  spec ' ' 'edcmotors_moveMotorDistance' 'move motor _ distance _ (encoder counts) at max speed _ (counts/sec) with start time _ (millis or ''now'')' 'num num num auto' 1 100 500 'now'
   spec ' ' 'edcmotors_moveMotorWithEffort' 'move motor _ with effort _ (-1023 to 1023)' 'num num' 1 250
   spec ' ' 'edcmotors_resetMotorEncoders' 'reset motor encoders _ : _ : ...' 'num num num num' 1 2 3 4
   spec ' ' 'edcmotors_stopAllMotors' 'stop all motors'
   spec ' ' 'edcmotors_stopMotors' 'stop motors _ : _ : ...' 'num num num num' 1 2 3 4
   spec ' ' 'edcmotors_waitForMotorsToStop' 'wait for motors to stop _ : _ : ...' 'num num num num' 1 2 3 4
+  space
+  spec ' ' 'edcmotors_moveMotorAlongPathList' 'move motor _ along path list _ with start time _ (millis or ''now'')' 'num num auto' 1 ('[data:makeList]' ('[data:makeList]' 0 0 0 0)) 'now'
   space
   spec ' ' '_edcmotors_basicMoveMotorWithEffort' '_basic move motor _ with effort _ (-1023 to 1023)' 'num num' 1 250
   spec 'r' '_edcmotors_computePointToPointTargetList' '_compute a target list for a move of distance _ (encoder counts) max speed _ (counts/sec) accel _ (counts/sec^2)' 'num num num' 2000 1000 100
@@ -46,13 +48,16 @@ to '_edcmotors_computePointToPointTargetList' distance maxSpeed accel {
 • maxSpeed: the maximum speed (counts/econd, sign is ignored but value must be nonzero)
 • accel: the acceleration (counts/second/second, sign is ignored but value must be nonzero)
 
-Return a target list for one element of _edcmotors__targetList. The target list consists
-of 1-4 nodes, each of which is of the form: [durationMillis startPosition startSpeed accel]:
-• Constant acceleration (omitted for tiny moves: accleration duration <1 millisecond)
-• Constant-speed motion at max speed (omitted if the move is short enough that maximum speed will not be reached)
-• Contant deceleration (omitted for tiny moves: accleration duration <1 millisecond)
+Return a target list for one element of _edcmotors__targetList.
+The target list consists of 1-4 path segments
+(see the comment in edcmotors_moveMotorAlongPathList for the format):
+• Constant acceleration
+• Constant-speed motion at max speed
+• Contant deceleration
 • Zero speed, to hold the final position
-Returns an empty list if there is a problem.'
+Segments may be omitted if the move is short enough that they are not needed.
+
+Return an empty list if there is a problem.'
   if (maxSpeed == 0) {
     sayIt 'maxSpeed must be nonzero'
     return ('[data:makeList]')
@@ -84,7 +89,7 @@ that the move is too short to reach maxSpeed. This routine exists solely to get 
 the max length limit for blocks'
   local 'durationMillisAccel' ('[misc:sqrt]' (((absoluteValue distance) * 1000000) / accel))
   if (durationMillisAccel <= 0) {
-    comment 'Move is too short to compute nodes'
+    comment 'Move is too short to compute segments'
     return ('[data:makeList]' ('[data:makeList]' -1 distance 0 0))
   }
   local 'accel1' (pid_applySign distance accel)
@@ -166,8 +171,8 @@ Assumes that _edcmotors_initLibrary has been called.'
   local 'startTimeMillis' 0
   local 'durationMillis' 0
   local 'targetList' (at index _edcmotors__targetList)
-  local 'targetNode' 0
-  local 'nodeDurationMillis' 0
+  local 'targetSegment' 0
+  local 'segmentDurationMillis' 0
   local 'startPosition' 0
   local 'startSpeed' 0
   local 'acceleration' 0
@@ -184,25 +189,25 @@ Assumes that _edcmotors_initLibrary has been called.'
       return ('[data:makeList]' 0 0 (booleanConstant false))
     }
     durationMillis = (millisSince startTimeMillis atMillis)
-    targetNode = (at 1 targetList)
-    nodeDurationMillis = (at 1 targetNode)
-    if (nodeDurationMillis < 0) {
-      comment 'Final node; move forever at the specified speed'
-      startPosition = (at 2 targetNode)
-      speed = (at 3 targetNode)
+    targetSegment = (at 1 targetList)
+    segmentDurationMillis = (at 1 targetSegment)
+    if (segmentDurationMillis < 0) {
+      comment 'Final segment; move forever at the specified speed'
+      startPosition = (at 2 targetSegment)
+      speed = (at 3 targetSegment)
       position = (startPosition + ((speed * durationMillis) / 1000))
       return ('[data:makeList]' position speed (booleanConstant true))
-    } (nodeDurationMillis <= durationMillis) {
-      comment 'Use this node'
-      startPosition = (at 2 targetNode)
-      startSpeed = (at 3 targetNode)
-      acceleration = (at 4 targetNode)
+    } (segmentDurationMillis <= durationMillis) {
+      comment 'Use this segment'
+      startPosition = (at 2 targetSegment)
+      startSpeed = (at 3 targetSegment)
+      acceleration = (at 4 targetSegment)
       position = ((startPosition + ((startSpeed * durationMillis) / 1000)) + ((((acceleration * durationMillis) / 1000) * durationMillis) / 2000))
       speed = (startSpeed + ((acceleration * durationMillis) / 1000))
       return ('[data:makeList]' position speed (booleanConstant true))
     } else {
-      comment 'This node has expired; discard it and try the next (if any)'
-      startTimeMillis = ('_edcmotors_addTime' startTimeMillis nodeDurationMillis)
+      comment 'This segment has expired; discard it and try the next (if any)'
+      startTimeMillis = ('_edcmotors_addTime' startTimeMillis segmentDurationMillis)
       '[data:delete]' 1 targetList
     }
   }
@@ -235,8 +240,9 @@ and create all lists (but do not set values) of variables that are system-specif
   _edcmotors__prevEncoderAState = (newList _edcmotors__numMotors (booleanConstant false))
   _edcmotors__prevEncoderBState = (newList _edcmotors__numMotors (booleanConstant false))
   _edcmotors__targetStartMillis = (newList _edcmotors__numMotors -1)
-  comment 'A list of target nodes, each of the form: [durationMillis startPosition startSpeed acceleration].
-A negative duration indicates that this node should run forever (until a new move or stop).
+  comment 'A list of target segments of constant acceleration,
+each of the form: [durationMillis startPosition startSpeed acceleration].
+A negative duration indicates that this segment should run forever (until a new move or stop).
 This is used to hold the final position of point to point moves,
 and to specify the speed for constant-speed moves.'
   _edcmotors__targetList = (newList _edcmotors__numMotors ('[data:makeList]'))
@@ -291,18 +297,42 @@ to '_edcmotors_stopOneMotor' index {
   _edcmotors__running = (_edcmotors__running & ('~' (1 << (index - 1))))
 }
 
-to edcmotors_moveMotorAtSpeed index speed {
+to edcmotors_moveMotorAlongPathList index pathList startTimeMillis {
+  comment 'Move the specified motor along the specified path list.
+Path list is a list of path segments of constant acceleration, each of the form:
+[durationMillis startPosition startSpeed acceleration].
+Note that if acceleration is 0, the segment has constant speed,
+and if acceleration and startSpeed are both 0, the segment has constant position.
+
+A negative duration indicates that this segment should run forever (until a new move or stop is commanded).
+Ending with such a segment is optional (the motor will stop if no such segment is found)
+but is useful to hold the final position of move, or move steadily at constant speed.'
+  '_edcmotors_initLibrary'
+  if (not (isType pathList 'list')) {
+    sayIt 'pathList =' pathList 'must be a list'
+    return
+  }
+  atPut index _edcmotors__targetStartMillis -1
+  edcmotors_resetMotorEncoders index
+  if (startTimeMillis == 'now') {
+    startTimeMillis = (millisOp)
+  } (not (isType startTimeMillis 'number')) {
+    sayIt 'startTimeMillis =' startTimeMillis 'must be a number or ''num'''
+    return
+  }
+  atPut index _edcmotors__targetList pathList
+  _edcmotors__running = (_edcmotors__running | (1 << (index - 1)))
+  atPut index _edcmotors__targetStartMillis startTimeMillis
+}
+
+to edcmotors_moveMotorAtSpeed index speed startTimeMillis {
   comment 'Move the specified motor at the specified speed (counts/sec)'
   '_edcmotors_initLibrary'
   speed = ('_edcmotors_constrainSpeed' index speed)
-  atPut index _edcmotors__targetStartMillis -1
-  edcmotors_resetMotorEncoders index
-  atPut index _edcmotors__targetList ('[data:makeList]' ('[data:makeList]' -1 0 speed 0))
-  _edcmotors__running = (_edcmotors__running | (1 << (index - 1)))
-  atPut index _edcmotors__targetStartMillis (millisOp)
+  edcmotors_moveMotorAlongPathList index ('[data:makeList]' ('[data:makeList]' -1 0 speed 0)) startTimeMillis
 }
 
-to edcmotors_moveMotorDistance index distance maxSpeed {
+to edcmotors_moveMotorDistance index distance maxSpeed startTimeMillis {
   comment 'Move the specified motor the specified distance (encoder counts) at the specified maximum speed (counts/sec).
 Specify distance < 0 for a negative move. The sign of maxSpeed is ignored, but the value must be nonzero.'
   '_edcmotors_initLibrary'
@@ -316,12 +346,7 @@ Specify distance < 0 for a negative move. The sign of maxSpeed is ignored, but t
     sayIt 'accel is 0; set variable _edcmotors__accel'
     return
   }
-  atPut index _edcmotors__targetStartMillis -1
-  edcmotors_resetMotorEncoders index
-  local 'targetList' ('_edcmotors_computePointToPointTargetList' distance maxSpeed accel)
-  atPut index _edcmotors__targetList targetList
-  _edcmotors__running = (_edcmotors__running | (1 << (index - 1)))
-  atPut index _edcmotors__targetStartMillis (millisOp)
+  edcmotors_moveMotorAlongPathList index ('_edcmotors_computePointToPointTargetList' distance maxSpeed accel) startTimeMillis
 }
 
 to edcmotors_moveMotorWithEffort index effort {
