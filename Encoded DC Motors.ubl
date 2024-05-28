@@ -145,52 +145,38 @@ in order to make the system more stable at the start and end of each move.'
 }
 
 to '_edcmotors_getTargetPositionSpeedRunning' index atMillis {
-  comment 'Compute the target position and speed for the specified motor at the specified time (msec, <0 for now).
+  comment 'Compute target position, speed, running for the specified motor at the specified time (msec).
 Return a list with three elements:
 * target position (encoder counts)
 * target speed (encoder counts/second)
-* running
+* running (boolean)
 Assumes that _edcmotors_initLibrary has been called.'
-  if (atMillis < 0) {
-    atMillis = (millisOp)
-  }
-  local 'startTimeMillis' 0
   local 'durationMillis' 0
   local 'targetList' (at index _edcmotors__targetList)
-  local 'targetSegment' 0
-  local 'segmentDurationMillis' 0
-  local 'startPosition' 0
-  local 'startSpeed' 0
-  local 'acceleration' 0
+  local 'targetDurationPositionSpeedAccel' 0
   local 'position' 0
   local 'speed' 0
   forever {
     comment 'Check list length and start time every time through the loop since another task may have changed while the loop starts over.'
-    startTimeMillis = (at index _edcmotors__targetStartMillis)
-    if (or (size targetList) == 0) (startTimeMillis < 0)) {
+    if (or ((size targetList) == 0) (at index _edcmotors__targetStartMillis)) {
       comment 'No path'
       return ('[data:makeList]' 0 0 (booleanConstant false))
     }
-    durationMillis = (millisSince startTimeMillis atMillis)
-    targetSegment = (at 1 targetList)
-    segmentDurationMillis = (at 1 targetSegment)
-    if (segmentDurationMillis < 0) {
+    durationMillis = (millisSince (at index _edcmotors__targetStartMillis) atMillis)
+    targetDurationPositionSpeedAccel = (at 1 targetList)
+    if ((at 1 targetDurationPositionSpeedAccel) < 0) {
       comment 'Final segment; move forever at the specified speed'
-      startPosition = (at 2 targetSegment)
-      speed = (at 3 targetSegment)
-      position = (startPosition + ((speed * durationMillis) / 1000))
+      speed = (at 3 targetDurationPositionSpeedAccel)
+      position = ((at 2 targetDurationPositionSpeedAccel) + ((speed * durationMillis) / 1000))
       return ('[data:makeList]' position speed (booleanConstant true))
-    } (segmentDurationMillis <= durationMillis) {
+    } ((at 1 targetDurationPositionSpeedAccel) <= durationMillis) {
       comment 'Use this segment'
-      startPosition = (at 2 targetSegment)
-      startSpeed = (at 3 targetSegment)
-      acceleration = (at 4 targetSegment)
-      position = ((startPosition + ((startSpeed * durationMillis) / 1000)) + ((((acceleration * durationMillis) / 1000) * durationMillis) / 2000))
-      speed = (startSpeed + ((acceleration * durationMillis) / 1000))
+      position = (((at 2 targetDurationPositionSpeedAccel) + (((at 3 targetDurationPositionSpeedAccel) * durationMillis) / 1000)) + (((((at 4 targetDurationPositionSpeedAccel) * durationMillis) / 1000) * durationMillis) / 2000))
+      speed = ((at 3 targetDurationPositionSpeedAccel) + (((at 4 targetDurationPositionSpeedAccel) * durationMillis) / 1000))
       return ('[data:makeList]' position speed (booleanConstant true))
     } else {
       comment 'This segment has expired; discard it and try the next (if any)'
-      atPut index _edcmotors__targetStartMillis ('_edcmotors_addTime' (at index _edcmotors__targetStartMillis) segmentDurationMillis)
+      atPut index _edcmotors__targetStartMillis ('_edcmotors_addTime' (at index _edcmotors__targetStartMillis) (at 1 targetDurationPositionSpeedAccel))
       '[data:delete]' 1 targetList
     }
   }
