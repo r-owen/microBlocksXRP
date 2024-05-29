@@ -116,18 +116,16 @@ override this method to return how many you are using. Never return less than 2.
 
 to xrp_driveAtSpeed leftSpeed rightSpeed {
   comment 'Drive the wheels at the specified speed (mm/sec)'
-  local 'startTimeMillis' (millisOp)
-  edcmotors_moveMotorAtSpeed 1 (xrp_mmToCounts leftSpeed) startTimeMillis
-  edcmotors_moveMotorAtSpeed 2 (0 - (xrp_mmToCounts rightSpeed)) startTimeMillis
+  edcmotors_moveMotorAtSpeed 1 (xrp_mmToCounts leftSpeed)
+  edcmotors_moveMotorAtSpeed 2 (0 - (xrp_mmToCounts rightSpeed))
 }
 
 to xrp_driveDistance distance speed {
   comment 'Drive the wheels the specified distance (mm) at the specified speed (mm/second)'
   local 'distanceCounts' (xrp_mmToCounts distance)
   local 'speedCounts' (xrp_mmToCounts speed)
-  local 'startTimeMillis' (millisOp)
-  edcmotors_moveMotorDistance 1 distanceCounts speedCounts startTimeMillis
-  edcmotors_moveMotorDistance 2 (0 - distanceCounts) speedCounts startTimeMillis
+  edcmotors_moveMotorDistance 1 distanceCounts speedCounts
+  edcmotors_moveMotorDistance 2 (0 - distanceCounts) speedCounts
 }
 
 to xrp_mmToCounts mm {
