@@ -15,6 +15,8 @@ variables edcmotors__encoderPosition _edcmotors__initialized _edcmotors__running
   space
   spec 'r' 'edcmotors_isRunning' 'is motor _ running?' 'num' 1
   spec ' ' 'edcmotors_moveMotorAlongPathList' 'move motor _ along path list _' 'num num auto' 1 ('[data:makeList]' ('[data:makeList]' 0 0 0 0))
+  spec 'r' 'edcmotors_makeNextSegmentWithEndSpeed' 'make path segment after _ with end speed _ (mm/sec)' 'auto num num' ('[data:makeList]' 0 0 0 0) 0
+  spec 'r' 'edcmotors_makeNextSegmentConstantSpeed' 'make path segment after _ for motor _ with constant speed and duration _ (millis)' 'auto num num' ('[data:makeList]' 0 0 0 0) 0
   space
   spec ' ' '_edcmotors_basicMoveMotorWithEffort' '_basic move motor _ with effort _ (-1023 to 1023)' 'num num' 1 250
   spec 'r' '_edcmotors_computePointToPointTargetList' '_compute a target list for a move of distance _ (encoder counts) max speed _ (counts/sec) accel _ (counts/sec^2)' 'num num num' 2000 1000 100
@@ -25,6 +27,7 @@ variables edcmotors__encoderPosition _edcmotors__initialized _edcmotors__running
   spec 'r' '_edcmotors_constrainSpeed' '_constrain speed for index _ desired speed _ (encoder counts/sec)' 'num num' 1 500
   spec ' ' '_edcmotors_initLibrary' '_edcmotors init library'
   spec ' ' '_edcmotors_initVariables' '_edcmotors init variables'
+  spec 'r' '_edcmotors_makeNextStarterSegment' _make next starter segment after _' 'auto' ('[data:makeList]' 0 0 0 0)
   spec ' ' '_edcmotors_monitorEncoders' '_monitor motor encoders'
   spec ' ' '_edcmotors_setRunning' '_set running state of motor _ to _' 'num bool' 1 (booleanConstant false)
   spec ' ' '_edcmotors_stopOneMotor' '_stop one motor _' 'num' 1
@@ -246,6 +249,8 @@ and to specify the speed for constant-speed moves.'
   _edcmotors__pinDutyCycle = (newList _edcmotors__numMotors 0)
 }
 
+to '_edcmotors_makeNextStarterSegment' prevSegment {
+}
 to '_edcmotors_monitorEncoders' {
   comment 'Monitor the motor encoders.
 This is a background tasks (and an infinite loop) which must be running
@@ -290,9 +295,52 @@ to '_edcmotors_stopOneMotor' index {
   _edcmotors_setRunning index (booleanConstant false)
 }
 
+to edcmotors_computeSegmentPositionSpeed segment duration {
+}
+
 to edcmotors_isRunning index {
   comment 'Return true if the specified motor is running.'
   return ('[data:convertType]' (_edcmotors__running & (1 << (index - 1))) 'boolean')
+}
+
+to edcmotors_makeNextSegmentEndAtPosition prevSegment position accel {
+  local 'nextSegment' (_edcmotors_makeNextStarterSegment prevSegment)
+  if (accel == 0) {
+    sayIt 'accel =' accel 'must be nonzero'
+    return nextSegment
+  }
+  local 'duration' (at 1 prevSegment)
+  local 'deltaPosition' (position - (at 2 nextSegment))
+  if (deltaPosition == 0) {
+    return nextSegment
+  }
+  local 'deltaSpeed' (speed - (at 3 nextSegment))
+  if (deltaSpeed != 0) {
+    atPut 4 nextSegment (pid_applySign deltaSpeed accel)
+    atPut 1 nextSegment (deltaSpeed * 1000 / accel)
+  }
+  return nextSegment
+}
+
+to edcmotors_makeNextSegmentWithEndSpeed prevSegment speed accel {
+  local 'nextSegment' (_edcmotors_makeNextStarterSegment prevSegment)
+  if (accel == 0) {
+    sayIt 'accel =' accel 'must be nonzero'
+    return nextSegment
+  }
+  local 'duration' (at 1 prevSegment)
+  local 'deltaSpeed' (speed - (at 3 nextSegment))
+  if (deltaSpeed != 0) {
+    atPut 4 nextSegment (pid_applySign deltaSpeed accel)
+    atPut 1 nextSegment (deltaSpeed * 1000 / accel)
+  }
+  return nextSegment
+}
+
+to edcmotors_makeNextSegmentConstantSpeed prevSegment durationMillis {
+  local 'nextSegment' (_edcmotors_makeNextStarterSegment prevSegment)
+  atPut 1 nextSegment durationMillis
+  return nextSegment
 }
 
 to edcmotors_moveMotorAlongPathList index pathList {
